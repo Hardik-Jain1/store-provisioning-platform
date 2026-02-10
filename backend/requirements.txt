@@ -1,0 +1,12 @@
+# Store Provisioning Platform Backend - Python Dependencies
+
+# Flask web framework
+Flask
+Flask-RESTful
+Flask-CORS
+
+# Database
+SQLAlchemy
+
+# Kubernetes client
+kubernetes
