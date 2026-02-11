@@ -1,0 +1,12 @@
+# Engine selector - conditionally includes engine-specific templates
+# This file serves as a router based on store.engine value
+
+{{- if eq .Values.store.engine "woocommerce" }}
+# WooCommerce engine is fully implemented
+# See templates/engine/woocommerce/*.yaml
+{{- else if eq .Values.store.engine "medusa" }}
+# Medusa engine is stubbed for future implementation
+# See templates/engine/medusa/stub.yaml
+{{- else }}
+{{- fail (printf "Unsupported engine type: %s. Must be 'woocommerce' or 'medusa'" .Values.store.engine) }}
+{{- end }}

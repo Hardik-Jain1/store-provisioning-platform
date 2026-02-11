@@ -1,1 +1,68 @@
+# Local environment overrides (kind/minikube/k3d)
 
+ingress:
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  tls:
+    enabled: false
+
+woocommerce:
+  wordpress:
+    persistence:
+      storageClass: "standard"  # Default for kind/minikube
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "250m"
+  
+  mysql:
+    persistence:
+      storageClass: "standard"  # Default for kind/minikube
+    
+    resources:
+      requests:
+        memory: "512Mi"  # Increased from 128Mi
+        cpu: "100m"
+      limits:
+        memory: "1Gi"    # Increased from 256Mi
+        cpu: "500m"
+    
+    readinessProbe:
+      exec:
+        command:
+        - bash
+        - -c
+        - |
+          mysql -h127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD} -e 'SELECT 1'
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
+    
+    livenessProbe:
+      exec:
+        command:
+        - bash
+        - -c
+        - |
+          mysqladmin ping -h127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD}
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 5
+  
+  setupJob:
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"

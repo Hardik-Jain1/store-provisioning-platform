@@ -1,1 +1,101 @@
-
+{{- if eq .Values.store.engine "woocommerce" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "store.mysql.serviceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  type: {{ .Values.woocommerce.mysql.service.type }}
+  ports:
+    - port: {{ .Values.woocommerce.mysql.service.port }}
+      targetPort: {{ .Values.woocommerce.mysql.service.targetPort }}
+      protocol: TCP
+      name: mysql
+  selector:
+    {{- include "store.mysql.selectorLabels" . | nindent 4 }}
+  clusterIP: None  # Headless service for StatefulSet
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-mysql-pvc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  accessModes:
+    - {{ .Values.woocommerce.mysql.persistence.accessMode }}
+  {{- if .Values.woocommerce.mysql.persistence.storageClass }}
+  storageClassName: {{ .Values.woocommerce.mysql.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.woocommerce.mysql.persistence.size }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-mysql
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  serviceName: {{ include "store.mysql.serviceName" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "store.mysql.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "store.mysql.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: mysql
+          image: "{{ .Values.woocommerce.mysql.image.repository }}:{{ .Values.woocommerce.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.woocommerce.mysql.image.pullPolicy }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_PASSWORD
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+          resources:
+            {{- toYaml .Values.woocommerce.mysql.resources | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.woocommerce.mysql.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.woocommerce.mysql.readinessProbe | nindent 12 }}
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-mysql-pvc
+{{- end }}

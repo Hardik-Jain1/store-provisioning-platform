@@ -1,0 +1,41 @@
+{{- if eq .Values.store.engine "medusa" }}
+---
+# Medusa engine implementation stub
+# This is a placeholder for future Medusa implementation
+#
+# When implemented, this should include:
+# - PostgreSQL StatefulSet with PVC
+# - Redis Deployment
+# - Medusa Backend Deployment
+# - Medusa Admin Deployment (optional)
+# - Medusa Storefront Deployment
+# - Services for all components
+# - Ingress routing for storefront and admin
+# - Setup Job for:
+#   - Database migrations
+#   - Admin user creation
+#   - Sample product creation
+#   - Region/currency configuration
+#
+# Architecture should mirror WooCommerce:
+# - Namespace isolation
+# - Secret management for DB credentials
+# - PVCs for persistent data
+# - Readiness/liveness probes
+# - Resource limits
+# - Clean teardown support
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-medusa-stub
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: medusa-stub
+data:
+  message: |
+    Medusa engine is not yet implemented.
+    This store cannot be provisioned.
+    Please use engine: woocommerce for now.
+{{- end }}

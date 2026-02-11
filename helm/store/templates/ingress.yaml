@@ -1,1 +1,44 @@
-
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.store.domain }}
+      secretName: {{ include "store.tls.secretName" . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.store.domain }}
+      http:
+        paths:
+          {{- if eq .Values.store.engine "woocommerce" }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "store.wordpress.serviceName" . }}
+                port:
+                  number: {{ .Values.woocommerce.wordpress.service.port }}
+          {{- else if eq .Values.store.engine "medusa" }}
+          # Medusa ingress routing (to be implemented)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-medusa
+                port:
+                  number: 9000
+          {{- end }}
+{{- end }}

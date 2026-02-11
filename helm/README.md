@@ -1,1 +1,472 @@
+# Store Provisioning Helm Chart
+
+A production-ready Helm chart for provisioning isolated e-commerce stores (WooCommerce/Medusa) on Kubernetes with namespace-per-store isolation.
+
+## Overview
+
+This Helm chart is the **core deployment mechanism** for the Store Provisioning Platform. Each store is deployed as a single Helm release with complete isolation in its own namespace.
+
+### Key Features
+
+- **Namespace-per-store isolation**: Each store runs in its own namespace with dedicated resources
+- **Multi-engine support**: WooCommerce (fully implemented), Medusa (stub)
+- **Production-ready**: Includes probes, resource limits, secrets management, and persistent storage
+- **Environment flexibility**: Same chart works for local (kind/minikube) and production (k3s/VPS) via values files
+- **Idempotent**: Safe to upgrade and uninstall with clean teardown
+- **Automated setup**: Setup Job handles complete e-commerce configuration
+- **End-to-end functional**: Stores support placing orders immediately after provisioning
+
+## Architecture
+
+### WooCommerce Stack
+
+```
+Namespace: store-{id}
+├── MySQL (StatefulSet)
+│   └── PVC: mysql-data (10Gi)
+├── WordPress + WooCommerce (Deployment)
+│   └── PVC: wordpress-uploads (5Gi)
+├── Setup Job (Job)
+│   ├── Installs WordPress
+│   ├── Activates WooCommerce
+│   ├── Creates sample products
+│   ├── Enables COD payment
+│   └── Configures permalinks
+├── Services (ClusterIP)
+│   ├── MySQL (internal)
+│   └── WordPress (internal)
+├── Ingress
+│   └── Routes: {store.domain} → WordPress
+└── Secrets
+    ├── DB credentials (auto-generated)
+    └── Admin credentials (auto-generated)
+```
+
+### How Backend Calls This Chart
+
+The backend calls Helm via CLI with dynamic values:
+
+```bash
+helm install {store.id} ./helm/store \
+  --namespace {store.namespace} \
+  --create-namespace \
+  -f values.yaml \
+  -f values-local.yaml \
+  --set store.id={id} \
+  --set store.name={name} \
+  --set store.namespace={namespace} \
+  --set store.engine={engine} \
+  --set store.domain={domain}
+```
+
+**Critical Design:**
+- Release name = `store.id`
+- Namespace = `store.namespace`
+- All store identity comes from `--set` values (not hardcoded)
+- Chart uses `{{ .Release.Namespace }}` consistently
+
+## Directory Structure
+
+```
+helm/store/
+├── Chart.yaml                  # Chart metadata
+├── values.yaml                 # Default values (all configurable)
+├── values-local.yaml           # Local environment overrides
+├── values-prod.yaml            # Production environment overrides
+├── templates/
+│   ├── _helpers.tpl            # Template helpers and functions
+│   ├── namespace.yaml          # Namespace with labels/annotations
+│   ├── secrets.yaml            # Auto-generated secrets
+│   ├── ingress.yaml            # Engine-agnostic ingress
+│   ├── engine.yaml             # Engine selector logic
+│   ├── engine/
+│   │   ├── woocommerce/
+│   │   │   ├── mysql.yaml          # MySQL StatefulSet + Service + PVC
+│   │   │   ├── wordpress.yaml      # WordPress Deployment + Service + PVC
+│   │   │   └── setup-job.yaml      # WooCommerce setup automation
+│   │   └── medusa/
+│   │       └── stub.yaml           # Medusa placeholder
+│   └── NOTES.txt               # Post-install instructions
+```
+
+## Usage
+
+### Prerequisites
+
+- Kubernetes cluster (kind/minikube/k3s)
+- Helm 3.x installed
+- Ingress controller (nginx recommended)
+- Storage provisioner with default StorageClass
+
+### Local Installation Example
+
+```bash
+# Install a WooCommerce store locally
+helm install store-abc123 ./helm/store \
+  --namespace store-abc123 \
+  --create-namespace \
+  -f values.yaml \
+  -f values-local.yaml \
+  --set store.id=abc123 \
+  --set store.name="My Test Store" \
+  --set store.namespace=store-abc123 \
+  --set store.engine=woocommerce \
+  --set store.domain=abc.localhost
+```
+
+### Production Installation Example
+
+```bash
+# Install a WooCommerce store on VPS (k3s)
+helm install store-xyz789 ./helm/store \
+  --namespace store-xyz789 \
+  --create-namespace \
+  -f values.yaml \
+  -f values-prod.yaml \
+  --set store.id=xyz789 \
+  --set store.name="Production Store" \
+  --set store.namespace=store-xyz789 \
+  --set store.engine=woocommerce \
+  --set store.domain=store.example.com
+```
+
+### Monitoring Setup Progress
+
+```bash
+# Watch setup job logs
+kubectl logs -n store-abc123 job/store-abc123-woocommerce-setup -f
+
+# Check pod status
+kubectl get pods -n store-abc123 -w
+
+# Wait for setup completion
+kubectl wait --for=condition=complete --timeout=600s \
+  job/store-abc123-woocommerce-setup -n store-abc123
+```
+
+### Upgrading a Store
+
+```bash
+# Upgrade chart (e.g., change resource limits)
+helm upgrade store-abc123 ./helm/store \
+  --namespace store-abc123 \
+  -f values.yaml \
+  -f values-local.yaml \
+  --set store.id=abc123 \
+  --set store.name="My Test Store" \
+  --set store.namespace=store-abc123 \
+  --set store.engine=woocommerce \
+  --set store.domain=abc.localhost
+```
+
+### Uninstalling a Store
+
+```bash
+# Remove all resources
+helm uninstall store-abc123 -n store-abc123
+
+# Delete namespace (includes PVCs)
+kubectl delete namespace store-abc123
+```
+
+## Configuration
+
+### Required Values (Must be set via --set)
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `store.id` | Unique store identifier (release name) | `abc123` |
+| `store.name` | Human-readable store name | `My Store` |
+| `store.namespace` | Kubernetes namespace | `store-abc123` |
+| `store.engine` | Engine type | `woocommerce` or `medusa` |
+| `store.domain` | Ingress domain | `abc.localhost` or `store.example.com` |
+
+### Important Configurable Values
+
+#### Ingress Configuration
+
+```yaml
+ingress:
+  enabled: true
+  className: "nginx"
+  tls:
+    enabled: false  # Set true for production with cert-manager
+```
+
+#### Storage Configuration
+
+```yaml
+woocommerce:
+  wordpress:
+    persistence:
+      storageClass: ""  # Empty = cluster default
+      size: "5Gi"
+  mysql:
+    persistence:
+      storageClass: ""
+      size: "10Gi"
+```
+
+#### Resource Limits
+
+```yaml
+woocommerce:
+  wordpress:
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+```
+
+#### Secrets (Auto-generated if not provided)
+
+```yaml
+secrets:
+  database:
+    rootPassword: ""  # Auto-generated with randAlphaNum(32)
+    username: "storeuser"
+    password: ""      # Auto-generated
+    name: "storedb"
+  admin:
+    username: "admin"
+    password: ""      # Auto-generated with randAlphaNum(24)
+    email: "admin@example.com"
+```
+
+## Environment-Specific Overrides
+
+### Local (values-local.yaml)
+
+- Lower resource requests/limits for laptop development
+- `storageClass: "standard"` (kind/minikube default)
+- TLS disabled
+- Suitable for kind/minikube/k3d
+
+### Production (values-prod.yaml)
+
+- Higher resource requests/limits for stable performance
+- `storageClass: "local-path"` (k3s default) or cloud provider class
+- TLS enabled with cert-manager annotations
+- Production-grade security settings
+
+## WooCommerce Setup Job
+
+The setup job (`setup-job.yaml`) automates complete WooCommerce configuration:
+
+### What It Does
+
+1. **Wait for WordPress** - Ensures WordPress HTTP endpoint is reachable
+2. **Install WordPress Core** - Completes initial WordPress setup
+3. **Install WooCommerce** - Installs and activates WooCommerce plugin
+4. **Configure Store** - Sets store address, currency, basic settings
+5. **Enable COD Payment** - Enables Cash on Delivery gateway for testing
+6. **Create Products** - Creates 2 sample products:
+   - Premium T-Shirt ($29.99)
+   - Wireless Headphones ($79.99)
+7. **Configure Permalinks** - Sets SEO-friendly URL structure
+8. **Verify Setup** - Validates all components are working
+
+### Exit Conditions
+
+✅ **Success** - All checks pass, store ready for orders  
+❌ **Failure** - Any verification fails, pod restarts (up to backoffLimit)
+
+### Idempotency
+
+The setup job is fully idempotent:
+- Checks if WordPress is already installed
+- Skips product creation if products exist
+- Safe to re-run if job fails mid-execution
+
+## Security Features
+
+### Secrets Management
+
+- All passwords auto-generated using `randAlphaNum`
+- Secrets injected via `secretKeyRef` (not environment variables directly)
+- No hardcoded credentials in source code
+- Retrievable via kubectl for admin access
+
+### Isolation
+
+- Namespace-per-store model
+- PVCs scoped to namespace
+- Services use ClusterIP (internal only)
+- Ingress exposes only HTTP endpoint
+
+### Resource Limits
+
+- CPU and memory limits prevent noisy neighbor issues
+- Requests ensure guaranteed resources
+- StorageClass quotas can be enforced at cluster level
+
+## Testing End-to-End Order Flow
+
+Once setup completes:
+
+1. **Access storefront**: `http://{store.domain}` or `https://{store.domain}`
+2. **Browse products**: See 2 sample products
+3. **Add to cart**: Add a product to cart
+4. **Checkout**: Proceed to checkout
+5. **Payment**: Select "Cash on Delivery"
+6. **Place order**: Complete order
+7. **Verify in admin**: Login to `/wp-admin`, check WooCommerce → Orders
+
+## Troubleshooting
+
+### Setup Job Fails
+
+```bash
+# Check setup job logs
+kubectl logs -n {namespace} job/{release}-woocommerce-setup
+
+# Common causes:
+# - WordPress pod not ready (check WordPress logs)
+# - MySQL connectivity issue (check MySQL pod)
+# - Insufficient resources (check node capacity)
+```
+
+### Pods Not Starting
+
+```bash
+# Check pod events
+kubectl describe pod -n {namespace} {pod-name}
+
+# Common causes:
+# - PVC pending (check StorageClass)
+# - Image pull errors (check image names)
+# - Resource constraints (check node capacity)
+```
+
+### Ingress Not Working
+
+```bash
+# Check ingress status
+kubectl get ingress -n {namespace}
+
+# Verify ingress controller is installed
+kubectl get pods -n ingress-nginx
+
+# Check ingress logs
+kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+```
+
+### MySQL Connection Failures
+
+```bash
+# Check MySQL readiness
+kubectl get pods -n {namespace} -l app.kubernetes.io/component=mysql
+
+# Check secret is created
+kubectl get secret -n {namespace} {release}-db-credentials
+
+# Test MySQL connectivity from WordPress pod
+kubectl exec -n {namespace} {wordpress-pod} -- mysql -h {mysql-service} -u root -p{password}
+```
+
+## Design Principles
+
+### Helm Best Practices Followed
+
+1. **Templating**: All dynamic values use Helm templates (no hardcoding)
+2. **Helpers**: Reusable template functions in `_helpers.tpl`
+3. **Labels**: Consistent labels using helper templates
+4. **Values Files**: Environment-specific overrides via separate values files
+5. **NOTES.txt**: Comprehensive post-install instructions
+6. **Version Control**: Chart.yaml with semantic versioning
+7. **Idempotency**: Safe to upgrade/rollback without side effects
+
+### Kubernetes Best Practices Followed
+
+1. **Probes**: Liveness and readiness probes on all containers
+2. **Resources**: Requests and limits on all workloads
+3. **Secrets**: Kubernetes secrets for sensitive data
+4. **PVCs**: Persistent storage for stateful components
+5. **Services**: Proper service types (ClusterIP for internal)
+6. **Ingress**: Standard ingress for external access
+7. **Init Containers**: Wait-for dependencies before main containers
+8. **Labels**: Consistent labeling for selectors and monitoring
+
+## Interview-Defensible Points
+
+### 1. Why StatefulSet for MySQL?
+
+- **Stable network identity**: Pod name never changes
+- **Ordered deployment**: Predictable startup sequence
+- **Headless service**: Direct pod DNS resolution
+- **Future-ready**: Easy to add replicas with ordered provisioning
+
+### 2. Why Deployment for WordPress?
+
+- **Stateless design**: Uploads stored in PVC (separable)
+- **Horizontal scaling**: Can increase replicas with session handling
+- **Rolling updates**: Zero-downtime WordPress updates
+- **Flexibility**: Easier to manage than StatefulSet
+
+### 3. Why Setup Job?
+
+- **Automation**: No manual WooCommerce setup required
+- **Idempotency**: Safe to retry if fails
+- **Verification**: Built-in checks ensure store is functional
+- **TTL Cleanup**: Auto-delete after 1 hour to free resources
+
+### 4. How Does This Scale?
+
+- **Store isolation**: Each store is independent (no shared resources)
+- **Namespace quotas**: Can enforce ResourceQuota per namespace
+- **Horizontal scaling**: Backend/API can scale independently
+- **Cluster autoscaling**: Kubernetes can add nodes as stores grow
+
+### 5. Failure Handling
+
+- **Setup Job**: Retries up to 3 times (backoffLimit)
+- **Probes**: Kubernetes restarts unhealthy pods automatically
+- **PVCs**: Data persists through pod restarts
+- **Helm rollback**: Can revert to previous working version
+
+### 6. Local → Production Parity
+
+- **Same chart**: Identical Kubernetes resources
+- **Values files**: Only configuration differs
+- **Ingress**: Domain changes, TLS enabled in prod
+- **Storage**: StorageClass changes, sizes increase in prod
+- **Resources**: Higher limits in prod for stability
+
+## Future Enhancements
+
+### Planned Features
+
+- [ ] Medusa engine implementation
+- [ ] Horizontal Pod Autoscaling
+- [ ] NetworkPolicies for enhanced isolation
+- [ ] PodDisruptionBudgets for high availability
+- [ ] Custom StorageClass per store
+- [ ] Backup/restore via CronJob
+- [ ] Multi-replica WordPress with session handling
+- [ ] MySQL read replicas for performance
+
+### Potential Optimizations
+
+- [ ] Image caching via initContainers
+- [ ] Shared WordPress base image with overlay PVC
+- [ ] Redis for WordPress object caching
+- [ ] CDN integration for static assets
+- [ ] Database connection pooling
+
+## Support
+
+For issues, questions, or contributions:
+
+- **Documentation**: See main project README.md
+- **System Design**: See docs/system_design.md
+- **Backend Integration**: See docs/backend_helm_interaction.md
+
+---
+
+**Maintainer**: Store Provisioning Platform Team  
+**Version**: 0.1.0  
+**Last Updated**: February 2026
 

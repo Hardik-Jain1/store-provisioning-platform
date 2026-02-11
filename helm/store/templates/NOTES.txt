@@ -1,1 +1,132 @@
+█████████████████████████████████████████████████████████████████████
+██                                                                 ██
+██   STORE PROVISIONING PLATFORM                                  ██
+██   Store successfully deployed                                  ██
+██                                                                 ██
+█████████████████████████████████████████████████████████████████████
+
+Store Details:
+--------------
+  Name:       {{ .Values.store.name }}
+  ID:         {{ .Values.store.id }}
+  Engine:     {{ .Values.store.engine }}
+  Namespace:  {{ .Release.Namespace }}
+  Release:    {{ .Release.Name }}
+
+Access Information:
+-------------------
+{{- if eq .Values.store.engine "woocommerce" }}
+  Storefront:     {{ include "store.url" . }}
+  Admin Panel:    {{ include "store.url" . }}/wp-admin
+  
+  Admin Credentials:
+    Username:     {{ .Values.secrets.admin.username }}
+    Password:     (stored in secret: {{ .Release.Name }}-admin-credentials)
+    
+  To retrieve admin password:
+    kubectl get secret {{ .Release.Name }}-admin-credentials \
+      -n {{ .Release.Namespace }} \
+      -o jsonpath='{.data.WORDPRESS_ADMIN_PASSWORD}' | base64 -d
+{{- else if eq .Values.store.engine "medusa" }}
+  Storefront:     {{ include "store.url" . }}
+  Admin Panel:    {{ include "store.url" . }}/app
+  
+  Note: Medusa engine is currently stubbed (not implemented)
+{{- end }}
+
+Kubernetes Resources:
+---------------------
+{{- if eq .Values.store.engine "woocommerce" }}
+  ✓ Namespace:    {{ .Release.Namespace }}
+  ✓ StatefulSet:  {{ .Release.Name }}-mysql (MySQL database)
+  ✓ Deployment:   {{ .Release.Name }}-wordpress (WordPress/WooCommerce)
+  ✓ Job:          {{ .Release.Name }}-woocommerce-setup (Setup automation)
+  ✓ PVCs:         
+      - {{ .Release.Name }}-mysql-pvc ({{ .Values.woocommerce.mysql.persistence.size }})
+      - {{ .Release.Name }}-wordpress-pvc ({{ .Values.woocommerce.wordpress.persistence.size }})
+  ✓ Services:
+      - {{ include "store.mysql.serviceName" . }} (MySQL)
+      - {{ include "store.wordpress.serviceName" . }} (WordPress)
+  ✓ Ingress:      {{ .Release.Name }}-ingress
+  ✓ Secrets:
+      - {{ .Release.Name }}-db-credentials
+      - {{ .Release.Name }}-admin-credentials
+{{- end }}
+
+Setup Status:
+-------------
+{{- if eq .Values.store.engine "woocommerce" }}
+  The setup job is configuring your WooCommerce store.
+  This includes:
+    • Installing WordPress core
+    • Installing and activating WooCommerce
+    • Creating sample products (2)
+    • Enabling Cash on Delivery payment
+    • Configuring permalinks
+  
+  Monitor setup progress:
+    kubectl logs -n {{ .Release.Namespace }} \
+      job/{{ .Release.Name }}-woocommerce-setup -f
+  
+  Check if setup completed:
+    kubectl get job -n {{ .Release.Namespace }} \
+      {{ .Release.Name }}-woocommerce-setup
+{{- end }}
+
+Verification Steps:
+-------------------
+{{- if eq .Values.store.engine "woocommerce" }}
+  1. Wait for all pods to be ready:
+       kubectl get pods -n {{ .Release.Namespace }} -w
+  
+  2. Wait for setup job to complete:
+       kubectl wait --for=condition=complete --timeout=600s \
+         job/{{ .Release.Name }}-woocommerce-setup -n {{ .Release.Namespace }}
+  
+  3. Access storefront:
+       Open: {{ include "store.url" . }}
+  
+  4. Verify order placement:
+       • Browse products
+       • Add to cart
+       • Proceed to checkout
+       • Select "Cash on Delivery"
+       • Complete order
+  
+  5. Verify order in admin:
+       • Login to {{ include "store.url" . }}/wp-admin
+       • Navigate to WooCommerce → Orders
+       • Confirm order appears
+{{- end }}
+
+Troubleshooting:
+----------------
+  View all resources:
+    kubectl get all -n {{ .Release.Namespace }}
+  
+  Check pod logs:
+    kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+  
+  Describe resources:
+    kubectl describe -n {{ .Release.Namespace }} <resource-type>/<resource-name>
+  
+  Common issues:
+    • Setup job failed: Check logs of setup job
+    • Pods not ready: Check MySQL connectivity from WordPress pod
+    • Ingress not working: Verify ingress controller is installed
+    • PVC pending: Check if StorageClass exists and is default
+
+Cleanup:
+--------
+  To remove this store completely:
+    helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}
+    kubectl delete namespace {{ .Release.Namespace }}
+  
+  Note: All data including database and uploads will be deleted.
+
+█████████████████████████████████████████████████████████████████████
+██                                                                 ██
+██   For support and documentation, see the project README        ██
+██                                                                 ██
+█████████████████████████████████████████████████████████████████████
 

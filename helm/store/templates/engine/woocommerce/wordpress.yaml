@@ -1,1 +1,114 @@
-
+{{- if eq .Values.store.engine "woocommerce" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "store.wordpress.serviceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+spec:
+  type: {{ .Values.woocommerce.wordpress.service.type }}
+  ports:
+    - port: {{ .Values.woocommerce.wordpress.service.port }}
+      targetPort: {{ .Values.woocommerce.wordpress.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "store.wordpress.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-wordpress-pvc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+spec:
+  accessModes:
+    - {{ .Values.woocommerce.wordpress.persistence.accessMode }}
+  {{- if .Values.woocommerce.wordpress.persistence.storageClass }}
+  storageClassName: {{ .Values.woocommerce.wordpress.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.woocommerce.wordpress.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-wordpress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+spec:
+  replicas: {{ .Values.woocommerce.wordpress.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "store.wordpress.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "store.wordpress.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL to be ready..."
+              until nc -z {{ include "store.mysql.serviceName" . }} 3306; do
+                echo "MySQL is unavailable - sleeping"
+                sleep 2
+              done
+              echo "MySQL is up - starting WordPress"
+      containers:
+        - name: wordpress
+          image: "{{ .Values.woocommerce.wordpress.image.repository }}:{{ .Values.woocommerce.wordpress.image.tag }}"
+          imagePullPolicy: {{ .Values.woocommerce.wordpress.image.pullPolicy }}
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: "{{ include "store.mysql.serviceName" . }}:3306"
+            - name: WORDPRESS_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_DATABASE
+            - name: WORDPRESS_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_USER
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: MYSQL_PASSWORD
+            - name: WORDPRESS_CONFIG_EXTRA
+              value: |
+                define('WP_HOME', '{{ include "store.url" . }}');
+                define('WP_SITEURL', '{{ include "store.url" . }}');
+                define('FORCE_SSL_ADMIN', {{ .Values.ingress.tls.enabled }});
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: wordpress-data
+              mountPath: /var/www/html
+          livenessProbe:
+            {{- toYaml .Values.woocommerce.wordpress.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.woocommerce.wordpress.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.woocommerce.wordpress.resources | nindent 12 }}
+      volumes:
+        - name: wordpress-data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-wordpress-pvc
+{{- end }}

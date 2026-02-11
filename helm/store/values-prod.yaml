@@ -1,1 +1,53 @@
+# Production environment overrides (k3s/VPS)
 
+ingress:
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  tls:
+    enabled: true
+    # secretName will be auto-generated: {{ .Release.Name }}-tls
+
+woocommerce:
+  wordpress:
+    persistence:
+      storageClass: "local-path"  # k3s default or configure as needed
+      size: "10Gi"
+    
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    
+    replicaCount: 1  # Can be increased with proper session handling
+  
+  mysql:
+    persistence:
+      storageClass: "local-path"  # k3s default or configure as needed
+      size: "20Gi"
+    
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+  
+  setupJob:
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+# Production security settings
+securityContext:
+  runAsNonRoot: false
+  fsGroup: 33

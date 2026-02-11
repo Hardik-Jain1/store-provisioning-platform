@@ -1,1 +1,12 @@
-
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    store.platform/namespace: "true"
+  annotations:
+    store.platform/created-at: {{ now | date "2006-01-02T15:04:05Z07:00" | quote }}
+    store.platform/store-id: {{ .Values.store.id | quote }}
+    store.platform/store-name: {{ .Values.store.name | quote }}
+    store.platform/engine: {{ .Values.store.engine | quote }}
