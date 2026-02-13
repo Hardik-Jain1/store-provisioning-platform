@@ -28,7 +28,7 @@ secrets:
     password: ""          # Auto-generated if empty
     name: "storedb"
   
-  # WordPress/Store admin credentials
+  # WordPress/Store admin credentials - will be auto-generated if not provided
   admin:
     username: "admin"
     password: ""          # Auto-generated if empty
@@ -104,29 +104,27 @@ woocommerce:
     livenessProbe:
       exec:
         command:
-          - mysqladmin
-          - ping
-          - -h
-          - localhost
-      initialDelaySeconds: 30
+        - bash
+        - -c
+        - |
+          mysqladmin ping -h127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD}
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 5
-      failureThreshold: 3
-    
+      successThreshold: 1
+      failureThreshold: 5
+
     readinessProbe:
       exec:
         command:
-          - mysql
-          - -h
-          - localhost
-          - -u
-          - root
-          - -p${MYSQL_ROOT_PASSWORD}
-          - -e
-          - "SELECT 1"
+        - bash
+        - -c
+        - |
+          mysql -h127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD} -e 'SELECT 1'
       initialDelaySeconds: 30
       periodSeconds: 10
       timeoutSeconds: 5
+      successThreshold: 1
       failureThreshold: 3
     
     service:

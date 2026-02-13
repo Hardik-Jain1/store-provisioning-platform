@@ -32,20 +32,20 @@ woocommerce:
     
     resources:
       requests:
-        memory: "512Mi"
-        cpu: "500m"
+        memory: "512Mi"  
+        cpu: "250m"
       limits:
-        memory: "1Gi"
-        cpu: "1000m"
+        memory: "1Gi"    
+        cpu: "500m"
   
   setupJob:
     resources:
       requests:
-        memory: "128Mi"
-        cpu: "100m"
+        memory: "1Gi"    
+        cpu: "512m"
       limits:
-        memory: "256Mi"
-        cpu: "200m"
+        memory: "2Gi"   
+        cpu: "1024m"
 
 # Production security settings
 securityContext:

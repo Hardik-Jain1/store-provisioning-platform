@@ -11,6 +11,7 @@ woocommerce:
   wordpress:
     persistence:
       storageClass: "standard"  # Default for kind/minikube
+      size: "2Gi"
     
     resources:
       requests:
@@ -31,32 +32,6 @@ woocommerce:
       limits:
         memory: "1Gi"    
         cpu: "500m"
-    
-    readinessProbe:
-      exec:
-        command:
-        - bash
-        - -c
-        - |
-          mysql -h127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD} -e 'SELECT 1'
-      initialDelaySeconds: 30
-      periodSeconds: 10
-      timeoutSeconds: 5
-      successThreshold: 1
-      failureThreshold: 3
-    
-    livenessProbe:
-      exec:
-        command:
-        - bash
-        - -c
-        - |
-          mysqladmin ping -h127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD}
-      initialDelaySeconds: 60
-      periodSeconds: 10
-      timeoutSeconds: 5
-      successThreshold: 1
-      failureThreshold: 5
   
   setupJob:
     resources:
