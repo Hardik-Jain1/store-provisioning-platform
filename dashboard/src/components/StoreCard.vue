@@ -29,6 +29,11 @@
         <span class="value">{{ formatDate(store.created_at) }}</span>
       </div>
 
+      <div class="info-row">
+        <span class="label">Last Updated:</span>
+        <span class="value">{{ formatDate(store.updated_at) }}</span>
+      </div>
+
       <div v-if="store.store_url" class="info-row">
         <span class="label">URL:</span>
         <a :href="store.store_url" target="_blank" class="store-url">
@@ -84,12 +89,13 @@ const canDelete = computed(() => {
 
 const formatDate = (dateString) => {
   const date = new Date(dateString);
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZoneName: 'short'
   });
 };
 

@@ -178,6 +178,10 @@ spec:
               timeout 60 wp option update woocommerce_currency "USD" --allow-root --path=/var/www/html || echo "⚠ Currency update timed out"
               timeout 60 wp option update woocommerce_calc_taxes "no" --allow-root --path=/var/www/html || echo "⚠ Tax calc update timed out"
               timeout 60 wp option update woocommerce_onboarding_profile '{"skipped":true}' --format=json --allow-root --path=/var/www/html || echo "⚠ Onboarding profile update timed out"
+              timeout 60 wp option update woocommerce_coming_soon "no" --allow-root --path=/var/www/html || echo "⚠ Coming soon mode update timed out"
+              timeout 60 wp option update woocommerce_store_pages_only "no" --allow-root --path=/var/www/html || echo "⚠ Store pages visibility update timed out"
+              # Ensure the store is launched (not in coming soon mode)
+              timeout 60 wp option delete woocommerce_admin_launch_your_store_tour_hidden --allow-root --path=/var/www/html 2>/dev/null || echo "⚠ Launch tour option not found (ok)"
               set -e  # Re-enable strict error checking
               echo "✓ WooCommerce basic settings configured"
               
