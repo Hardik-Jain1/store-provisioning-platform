@@ -40,6 +40,7 @@ class Config:
     # Provisioning configuration
     PROVISIONING_TIMEOUT_SECONDS = int(os.getenv('PROVISIONING_TIMEOUT_SECONDS', 600))  # 10 minutes
     PROVISIONING_POLL_INTERVAL_SECONDS = int(os.getenv('PROVISIONING_POLL_INTERVAL_SECONDS', 5))
+    PROVISIONING_MAX_WORKERS = int(os.getenv('PROVISIONING_MAX_WORKERS', 5))  # Max concurrent provisioning tasks
 
     # Domain configuration
     BASE_DOMAIN = os.getenv('BASE_DOMAIN', 'localhost')

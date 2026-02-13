@@ -114,7 +114,7 @@ class HelmService:
             )
             
             logger.info(f"Helm install succeeded for release: {release_name}")
-            logger.debug(f"Helm output: {result.stdout}")
+            # logger.debug(f"Helm output: {result.stdout}")
             
             return True, result.stdout
             

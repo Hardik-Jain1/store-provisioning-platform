@@ -127,10 +127,11 @@ def create_app(config_class=Config):
         helm_service=helm_service,
         k8s_service=k8s_service,
         store_service=store_service,
+        max_workers=Config.PROVISIONING_MAX_WORKERS
     )
     
     provisioning_worker.start()
-    logger.info("ProvisioningWorker started")
+    logger.info(f"ProvisioningWorker started with max_workers={Config.PROVISIONING_MAX_WORKERS}")
     
     # Crash recovery: Resume provisioning for stores in PROVISIONING state
     logger.info("Checking for stores to resume...")
