@@ -1,5 +1,6 @@
 # Store Provisioning Platform Backend - Python Dependencies
 
+python-dotenv
 # Flask web framework
 Flask
 Flask-RESTful

@@ -10,7 +10,7 @@ import logging
 from typing import Dict, Optional
 from pathlib import Path
 
-from config import HELM_CHART_PATH, HELM_VALUES_FILE, HELM_ENV_VALUES_FILE
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class HelmService:
         Args:
             chart_path: Path to Helm chart directory (defaults to config value)
         """
-        self.chart_path = chart_path or HELM_CHART_PATH
+        self.chart_path = chart_path or Config.HELM_CHART_PATH
         logger.info(f"HelmService initialized with chart path: {self.chart_path}")
         
         # Verify Helm is available
@@ -94,8 +94,8 @@ class HelmService:
             self.chart_path,
             '--namespace', namespace,
             '--create-namespace',
-            '-f', f'{self.chart_path}/{HELM_VALUES_FILE}',
-            '-f', f'{self.chart_path}/{HELM_ENV_VALUES_FILE}',
+            '-f', f'{self.chart_path}/{Config.HELM_VALUES_FILE}',
+            '-f', f'{self.chart_path}/{Config.HELM_ENV_VALUES_FILE}',
         ]
         
         # Add dynamic values via --set

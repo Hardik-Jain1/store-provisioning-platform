@@ -89,10 +89,10 @@ woocommerce:
     
     resources:
       requests:
-        memory: "256Mi"
+        memory: "512Mi"  
         cpu: "250m"
       limits:
-        memory: "512Mi"
+        memory: "1Gi"    
         cpu: "500m"
     
     persistence:
@@ -142,11 +142,11 @@ woocommerce:
     
     resources:
       requests:
-        memory: "1.5Gi"    
-        cpu: "750m"
+        memory: "1Gi"    
+        cpu: "512m"
       limits:
-        memory: "3Gi"   
-        cpu: "1500m"
+        memory: "2Gi"   
+        cpu: "1024m"
     
     backoffLimit: 3
     ttlSecondsAfterFinished: 3600  # Clean up job 1 hour after completion

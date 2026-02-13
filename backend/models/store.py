@@ -5,7 +5,7 @@ Represents the source of truth for store lifecycle state.
 The database is authoritative for idempotency and crash recovery.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -49,9 +49,20 @@ class Store(Base):
     # Store URL (populated when status = READY)
     store_url = Column(String, nullable=True)
     
+    # Database credentials
+    db_root_password = Column(String, nullable=False)
+    db_name = Column(String, nullable=False)
+    db_username = Column(String, nullable=False)
+    db_password = Column(String, nullable=False)
+    
+    # Admin credentials
+    admin_username = Column(String, nullable=False)
+    admin_password = Column(String, nullable=False)
+    admin_email = Column(String, nullable=False)
+    
     # Timestamps for audit trail
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     def __repr__(self):
         return f"<Store(id={self.id}, name={self.name}, engine={self.engine}, status={self.status})>"
@@ -67,6 +78,8 @@ class Store(Base):
             'status': self.status,
             'failure_reason': self.failure_reason,
             'store_url': self.store_url,
+            'admin_username': self.admin_username,
+            'admin_email': self.admin_email,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

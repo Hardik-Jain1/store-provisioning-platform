@@ -1,4 +1,3 @@
-"""API package"""
-from .stores import stores_bp
+from .stores import init_stores_api, register_resources
 
-__all__ = ['stores_bp']
+__all__ = ['init_stores_api', 'register_resources']

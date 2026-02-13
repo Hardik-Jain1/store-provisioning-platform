@@ -16,26 +16,71 @@ The backend does NOT:
 - Manage pods/services directly
 """
 
-import os
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from flask import Flask
 from flask_restful import Api
 from flask_cors import CORS
 
 from config import Config
-from db.session import init_db, get_session
-from models.store import Store
+from db.session import init_db
 from services.store_service import StoreService
 from services.helm_service import HelmService
 from services.k8s_service import K8sService
 from workers.provisioning import ProvisioningWorker
 from api.stores import register_resources, init_stores_api
 
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+def setup_logging():
+    """Configure logging with file and console handlers."""
+    # Create logs directory if it doesn't exist
+    log_dir = Path(Config.LOG_DIR)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Get root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all messages
+    
+    # Clear any existing handlers
+    root_logger.handlers.clear()
+    
+    # File handler - detailed logging
+    log_file_path = log_dir / Config.LOG_FILE
+    file_handler = RotatingFileHandler(
+        log_file_path,
+        maxBytes=Config.LOG_MAX_BYTES,
+        backupCount=Config.LOG_BACKUP_COUNT
+    )
+    file_handler.setLevel(logging.DEBUG)  # Log everything to file
+    file_formatter = logging.Formatter(Config.LOG_FORMAT)
+    file_handler.setFormatter(file_formatter)
+    root_logger.addHandler(file_handler)
+    
+    # Console handler - only important messages
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)  # Only INFO and above to console
+    console_formatter = logging.Formatter('%(levelname)s - %(message)s')
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+    
+    # Suppress verbose third-party library logging
+    # Kubernetes client logs full HTTP responses at DEBUG level
+    logging.getLogger('kubernetes.client.rest').setLevel(logging.WARNING)
+    logging.getLogger('kubernetes').setLevel(logging.INFO)
+    # Suppress urllib3 connection pool logging
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    
+    # Log the log file location
+    root_logger.info(f"Logging to file: {log_file_path}")
+
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -85,7 +130,7 @@ def create_app(config_class=Config):
     )
     
     provisioning_worker.start()
-    logger.info("✓ ProvisioningWorker started")
+    logger.info("ProvisioningWorker started")
     
     # Crash recovery: Resume provisioning for stores in PROVISIONING state
     logger.info("Checking for stores to resume...")
@@ -109,10 +154,10 @@ def create_app(config_class=Config):
 def main():
     app = create_app()
     
-    # Get configuration
-    host = os.getenv('FLASK_HOST', '0.0.0.0')
-    port = int(os.getenv('FLASK_PORT', 5000))
-    debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    # Get configuration from Config class
+    host = Config.FLASK_HOST
+    port = Config.FLASK_PORT
+    debug = Config.FLASK_DEBUG
     
     logger.info(f"Starting Flask application on {host}:{port} (debug={debug})")
     

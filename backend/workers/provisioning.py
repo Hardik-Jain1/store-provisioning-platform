@@ -15,7 +15,7 @@ from models.store import Store
 from services.helm_service import HelmService
 from services.k8s_service import K8sService
 from services.store_service import StoreService
-from config import PROVISIONING_TIMEOUT_SECONDS, PROVISIONING_POLL_INTERVAL_SECONDS
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,10 @@ class ProvisioningWorker:
                     return
                 
                 logger.info(f"Helm install succeeded for store {store_id}")
+                
+                # Give Kubernetes time to schedule pods after Helm install
+                logger.info(f"Waiting for pods to be scheduled for store {store_id}...")
+                time.sleep(15)  # Wait 15 seconds for initial pod scheduling
             else:
                 logger.info(f"Helm release already exists for store {store_id} (status: {helm_status})")
             
@@ -231,8 +235,8 @@ class ProvisioningWorker:
             while True:
                 # Check timeout
                 elapsed = time.time() - start_time
-                if elapsed > PROVISIONING_TIMEOUT_SECONDS:
-                    timeout_msg = f"Provisioning timed out after {PROVISIONING_TIMEOUT_SECONDS} seconds"
+                if elapsed > Config.PROVISIONING_TIMEOUT_SECONDS:
+                    timeout_msg = f"Provisioning timed out after {Config.PROVISIONING_TIMEOUT_SECONDS} seconds"
                     logger.error(f"Store {store_id}: {timeout_msg}")
                     self.store_service.update_store_status(
                         store_id,
@@ -243,7 +247,8 @@ class ProvisioningWorker:
                 
                 # Check readiness
                 ready, store_url, failure_reason = self.k8s_service.check_store_ready(
-                    store.namespace
+                    store.namespace,
+                    f"{store.helm_release}-ingress"
                 )
                 
                 if ready:
@@ -268,7 +273,7 @@ class ProvisioningWorker:
                 
                 # Not ready yet, wait and retry
                 logger.debug(f"Store {store_id} not ready yet (elapsed: {elapsed:.1f}s), polling again...")
-                time.sleep(PROVISIONING_POLL_INTERVAL_SECONDS)
+                time.sleep(Config.PROVISIONING_POLL_INTERVAL_SECONDS)
         
         except Exception as e:
             # Unexpected error

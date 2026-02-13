@@ -9,5 +9,6 @@ dependencies = [
     "flask-cors>=6.0.2",
     "flask-restful>=0.3.10",
     "kubernetes>=35.0.0",
+    "python-dotenv>=1.2.1",
     "sqlalchemy>=2.0.46",
 ]

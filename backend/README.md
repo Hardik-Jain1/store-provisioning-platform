@@ -158,7 +158,15 @@ PROVISIONING_POLL_INTERVAL_SECONDS=5
 # Domain
 BASE_DOMAIN=localhost
 
+# Logging
+LOG_DIR=logs  # Directory for log files
+LOG_FILE=store_platform.log  # Log file name
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_MAX_BYTES=10485760  # 10MB max log file size before rotation
+LOG_BACKUP_COUNT=5  # Number of backup log files to keep
+
 # Flask
+FLASK_HOST=0.0.0.0
 FLASK_ENV=development
 FLASK_DEBUG=True
 FLASK_PORT=5000
@@ -177,27 +185,18 @@ python app.py
 You should see output like:
 
 ```
-============================================================
-Store Provisioning Platform - Backend Control Plane
-============================================================
-Initializing database...
-Database initialized successfully
-Initializing services...
-✓ HelmService initialized
-✓ K8sService initialized
-✓ StoreService initialized
-Initializing provisioning worker...
-✓ ProvisioningWorker started
-Checking for stores to resume...
-Found 0 stores in PROVISIONING state
-Initializing API routes...
-✓ API routes registered
-============================================================
-Backend initialization complete
-============================================================
-Starting Flask development server on port 5000...
-API available at: http://localhost:5000
+INFO - Logging to file: d:\path\to\backend\logs\store_platform.log
+INFO - Initializing Store Provisioning Platform Backend...
+INFO - Database initialized
+INFO - All services initialized successfully
+INFO - ✓ ProvisioningWorker started
+INFO - Checking for stores to resume...
+INFO - No stores to resume
+INFO - REST API resources registered
+INFO - Starting Flask application on 0.0.0.0:5000 (debug=True)
 ```
+
+**Note:** Detailed logs are written to `logs/store_platform.log`. The console shows only INFO level and above for cleaner output, while the log file contains DEBUG level details for troubleshooting.
 
 ---
 

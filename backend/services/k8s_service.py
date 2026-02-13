@@ -10,7 +10,7 @@ from typing import Optional, Dict
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-from config import KUBECONFIG_PATH
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +38,9 @@ class K8sService:
     def _load_kube_config(self):
         """Load Kubernetes configuration."""
         try:
-            if KUBECONFIG_PATH:
-                config.load_kube_config(config_file=KUBECONFIG_PATH)
-                logger.info(f"Loaded kubeconfig from: {KUBECONFIG_PATH}")
+            if Config.KUBECONFIG_PATH:
+                config.load_kube_config(config_file=Config.KUBECONFIG_PATH)
+                logger.info(f"Loaded kubeconfig from: {Config.KUBECONFIG_PATH}")
             else:
                 config.load_kube_config()
                 logger.info("Loaded kubeconfig from default location")
@@ -67,133 +67,120 @@ class K8sService:
             logger.error(f"Error checking namespace {namespace}: {e}")
             raise
     
-    def check_pods_ready(self, namespace: str) -> tuple[bool, str]:
+    def check_pods_ready(self, namespace: str) -> tuple[bool, str, bool]:
         """
-        Check if all pods in a namespace are ready.
-        
-        A pod is considered ready when:
-        - Phase is 'Running' or 'Succeeded'
-        - All containers are ready
-        - No containers are in CrashLoopBackOff
-        
-        Args:
-            namespace: Namespace to check
+        Check pod readiness status.
         
         Returns:
-            Tuple of (all_ready: bool, status_message: str)
+            Tuple of (all_ready: bool, status_message: str, setup_job_completed: bool)
         """
         try:
             pods = self.core_v1.list_namespaced_pod(namespace=namespace)
             
-            if not pods.items:
-                return False, "No pods found in namespace"
-            
+            mysql_ready = False
+            wordpress_ready = False
+            setup_job_completed = False
+            failure_reason = None
             pod_statuses = []
-            all_ready = True
             
             for pod in pods.items:
-                pod_name = pod.metadata.name
-                phase = pod.status.phase
+                name = pod.metadata.name
+                status = pod.status.phase
                 
-                # Check if pod is in a terminal failure state
-                if phase in ['Failed', 'Unknown']:
-                    all_ready = False
-                    pod_statuses.append(f"{pod_name}: {phase}")
-                    continue
-                
-                # Check for CrashLoopBackOff or ImagePullBackOff
+                # Count ready containers
+                ready_count = 0
+                total_containers = 0
                 if pod.status.container_statuses:
                     for container in pod.status.container_statuses:
-                        if container.state.waiting:
-                            reason = container.state.waiting.reason
-                            if reason in ['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull']:
-                                all_ready = False
-                                pod_statuses.append(f"{pod_name}/{container.name}: {reason}")
-                                continue
+                        total_containers += 1
+                        if container.ready:
+                            ready_count += 1
+                ready = f"{ready_count}/{total_containers}"
                 
-                # Check if pod is ready
-                if pod.status.conditions:
-                    ready_condition = next(
-                        (c for c in pod.status.conditions if c.type == 'Ready'),
-                        None
-                    )
-                    
-                    if ready_condition and ready_condition.status == 'True':
-                        pod_statuses.append(f"{pod_name}: Ready")
+                # Get restarts
+                restarts = 0
+                if pod.status.container_statuses:
+                    for container in pod.status.container_statuses:
+                        restarts += container.restart_count
+                
+                # Identify pod type and check status
+                if 'mysql' in name:
+                    # MySQL pod check
+                    if status == 'Running' and ready_count == total_containers:
+                        mysql_ready = True
+                        pod_statuses.append(f"{name}: Ready (1/1)")
+                    elif status == 'Pending':
+                        pod_statuses.append(f"{name}: Pending")
                     else:
-                        all_ready = False
-                        reason = ready_condition.reason if ready_condition else 'Unknown'
-                        pod_statuses.append(f"{pod_name}: Not Ready ({reason})")
-                else:
-                    all_ready = False
-                    pod_statuses.append(f"{pod_name}: No conditions")
+                        # Check for failure reasons
+                        if pod.status.container_statuses:
+                            container = pod.status.container_statuses[0]
+                            if container.state.waiting:
+                                reason = container.state.waiting.reason
+                                if reason in ['ImagePullBackOff', 'ErrImagePull']:
+                                    failure_reason = f"MySQL: {reason}"
+                                elif reason == 'CrashLoopBackOff':
+                                    failure_reason = f"MySQL: CrashLoopBackOff"
+                                else:
+                                    pod_statuses.append(f"{name}: {reason}")
+                            elif container.state.terminated:
+                                failure_reason = f"MySQL: Container terminated"
+                
+                elif 'wordpress' in name:
+                    # WordPress pod check
+                    if status == 'Running' and ready_count == total_containers:
+                        wordpress_ready = True
+                        pod_statuses.append(f"{name}: Ready (1/1)")
+                    elif status == 'Pending':
+                        pod_statuses.append(f"{name}: Pending")
+                    else:
+                        # Check for failure reasons
+                        if pod.status.container_statuses:
+                            container = pod.status.container_statuses[0]
+                            if container.state.waiting:
+                                reason = container.state.waiting.reason
+                                if reason in ['ImagePullBackOff', 'ErrImagePull']:
+                                    failure_reason = f"WordPress: {reason}"
+                                elif reason == 'CrashLoopBackOff':
+                                    failure_reason = f"WordPress: CrashLoopBackOff (Restarts: {restarts})"
+                                else:
+                                    pod_statuses.append(f"{name}: {reason}")
+                            elif container.state.terminated:
+                                failure_reason = f"WordPress: Container terminated"
+                
+                elif 'woocommerce-setup' in name:
+                    # Setup job pod check
+                    if pod.status.container_statuses:
+                        container = pod.status.container_statuses[0]
+                        
+                        if container.state.terminated:
+                            # Job completed
+                            if container.state.terminated.exit_code == 0:
+                                setup_job_completed = True
+                                pod_statuses.append(f"{name}: Completed")
+                            else:
+                                failure_reason = f"Setup job failed with exit code {container.state.terminated.exit_code}"
+                        elif container.state.running:
+                            pod_statuses.append(f"{name}: Running (0/1)")
+                        elif container.state.waiting:
+                            reason = container.state.waiting.reason
+                            pod_statuses.append(f"{name}: {reason}")
             
-            status_message = "; ".join(pod_statuses)
+            # Determine overall readiness
+            status_msg = " | ".join(pod_statuses)
             
-            if all_ready:
-                logger.info(f"All pods ready in namespace {namespace}")
-            else:
-                logger.debug(f"Pods not ready in namespace {namespace}: {status_message}")
+            # All ready only if MySQL and WordPress are ready AND setup job is completed
+            all_ready = mysql_ready and wordpress_ready and setup_job_completed
             
-            return all_ready, status_message
-            
-        except ApiException as e:
-            if e.status == 404:
-                return False, f"Namespace {namespace} not found"
-            logger.error(f"Error checking pods in namespace {namespace}: {e}")
-            return False, f"API error: {e.reason}"
-    
-    def check_job_succeeded(self, namespace: str, job_name_prefix: str = 'setup-job') -> tuple[bool, Optional[str]]:
-        """
-        Check if a setup job has succeeded.
-        
-        The setup job is responsible for initializing the store
-        (e.g., installing WooCommerce plugins, seeding data).
-        
-        Args:
-            namespace: Namespace to check
-            job_name_prefix: Prefix of job name to look for
-        
-        Returns:
-            Tuple of (succeeded: bool, failure_reason: Optional[str])
-        """
-        try:
-            jobs = self.batch_v1.list_namespaced_job(namespace=namespace)
-            
-            # Find the setup job
-            setup_job = None
-            for job in jobs.items:
-                if job.metadata.name.startswith(job_name_prefix):
-                    setup_job = job
-                    break
-            
-            if not setup_job:
-                # Job might not be created yet
-                return False, None
-            
-            job_status = setup_job.status
-            
-            # Check if job succeeded
-            if job_status.succeeded and job_status.succeeded > 0:
-                logger.info(f"Setup job succeeded in namespace {namespace}")
-                return True, None
-            
-            # Check if job failed
-            if job_status.failed and job_status.failed > 0:
-                failure_reason = f"Setup job failed ({job_status.failed} attempts)"
-                logger.warning(f"{failure_reason} in namespace {namespace}")
-                return False, failure_reason
-            
-            # Job is still running
-            return False, None
+            return all_ready, status_msg, failure_reason
             
         except ApiException as e:
             if e.status == 404:
-                return False, None  # Job not created yet
-            logger.error(f"Error checking job in namespace {namespace}: {e}")
-            return False, f"API error: {e.reason}"
+                return False, f"Namespace {namespace} not found", None
+            logger.error(f"Error checking pods: {e}")
+            return False, f"API error: {e.reason}", None
     
-    def get_ingress_url(self, namespace: str, ingress_name: str = 'store-ingress') -> Optional[str]:
+    def get_ingress_url(self, namespace: str, ingress_name: str) -> Optional[str]:
         """
         Get the URL for a store's ingress.
         
@@ -231,7 +218,7 @@ class K8sService:
             logger.error(f"Error getting ingress in namespace {namespace}: {e}")
             return None
     
-    def check_store_ready(self, namespace: str) -> tuple[bool, Optional[str], Optional[str]]:
+    def check_store_ready(self, namespace: str, ingress: str) -> tuple[bool, Optional[str], Optional[str]]:
         """
         Comprehensive readiness check for a store.
         
@@ -253,23 +240,16 @@ class K8sService:
             return False, None, f"Namespace {namespace} does not exist"
         
         # Check pods
-        pods_ready, pod_status = self.check_pods_ready(namespace)
-        if not pods_ready:
-            return False, None, f"Pods not ready: {pod_status}"
+        all_ready, pod_status, failure_reason = self.check_pods_ready(namespace)
+        logger.debug(f"Pod status for {namespace}: {pod_status}")
+
+        if failure_reason:
+            return False, None, failure_reason
         
-        # Check setup job
-        job_succeeded, job_failure = self.check_job_succeeded(namespace)
-        if not job_succeeded:
-            if job_failure:
-                return False, None, job_failure
-            # Job still running, not ready yet
+        if not all_ready:
+            # Still provisioning, no failure
             return False, None, None
         
-        # Check ingress
-        store_url = self.get_ingress_url(namespace)
-        if not store_url:
-            return False, None, "Ingress URL not available"
-        
-        # All checks passed
-        logger.info(f"Store ready in namespace {namespace}: {store_url}")
+        # All pods ready, get ingress URL
+        store_url = self.get_ingress_url(namespace, ingress)
         return True, store_url, None

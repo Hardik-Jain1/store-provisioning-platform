@@ -14,11 +14,11 @@ woocommerce:
     
     resources:
       requests:
-        memory: "128Mi"
-        cpu: "100m"
-      limits:
         memory: "256Mi"
         cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
   
   mysql:
     persistence:
@@ -26,10 +26,10 @@ woocommerce:
     
     resources:
       requests:
-        memory: "512Mi"  # Increased from 128Mi
-        cpu: "100m"
+        memory: "512Mi"  
+        cpu: "250m"
       limits:
-        memory: "1Gi"    # Increased from 256Mi
+        memory: "1Gi"    
         cpu: "500m"
     
     readinessProbe:
@@ -61,8 +61,8 @@ woocommerce:
   setupJob:
     resources:
       requests:
-        memory: "64Mi"
-        cpu: "50m"
+        memory: "1Gi"    
+        cpu: "512m"
       limits:
-        memory: "128Mi"
-        cpu: "100m"
+        memory: "2Gi"   
+        cpu: "1024m"

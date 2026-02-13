@@ -129,7 +129,7 @@ spec:
 
               # Ensure directories exist with correct permissions
               echo ""
-              echo "[0/7] Setting up directories and permissions..."
+              echo "[0/6] Setting up directories and permissions..."
               mkdir -p /var/www/html/wp-content/upgrade
               mkdir -p /var/www/html/wp-content/plugins
               mkdir -p /var/www/html/wp-content/uploads
@@ -138,7 +138,7 @@ spec:
 
               # WordPress core installation
               echo ""
-              echo "[1/7] Installing WordPress core..."
+              echo "[1/6] Installing WordPress core..."
               if ! wp core is-installed --allow-root --path=/var/www/html; then
                 wp core install \
                   --url="${WORDPRESS_URL}" \
@@ -155,7 +155,7 @@ spec:
               
               # Install and activate WooCommerce
               echo ""
-              echo "[2/7] Installing WooCommerce plugin..."
+              echo "[2/6] Installing WooCommerce plugin..."
               if ! wp plugin is-installed woocommerce --allow-root --path=/var/www/html; then
                 wp plugin install woocommerce --activate --allow-root --path=/var/www/html
                 echo "✓ WooCommerce installed and activated"
@@ -168,7 +168,7 @@ spec:
 
               # Complete WooCommerce setup (skip wizard)
               echo ""
-              echo "[3/7] Configuring WooCommerce basic settings..."
+              echo "[3/6] Configuring WooCommerce basic settings..."
               # Use timeout to prevent hanging, and add error handling
               set +e  # Temporarily allow errors
               timeout 90 wp option update woocommerce_store_address "123 Store Street" --allow-root --path=/var/www/html || echo "⚠ Store address update timed out"
@@ -183,12 +183,12 @@ spec:
               
               # Enable Cash on Delivery payment gateway
               echo ""
-              echo "[4/7] Enabling Cash on Delivery payment gateway..."
+              echo "[4/6] Enabling Cash on Delivery payment gateway..."
               timeout 60 wp option update woocommerce_cod_settings '{"enabled":"yes","title":"Cash on Delivery","description":"Pay with cash upon delivery"}' --format=json --allow-root --path=/var/www/html || echo "⚠ COD settings update timed out"
               
               # Create sample products
               echo ""
-              echo "[5/7] Creating sample products..."
+              echo "[5/6] Creating sample products..."
               
               # Product 1: Premium T-Shirt
               PRODUCT1_EXISTS=$(wp post list --post_type=product --title="Premium T-Shirt" --format=count --allow-root --path=/var/www/html)
@@ -232,12 +232,12 @@ spec:
                 echo "✓ Product 2 already exists: Wireless Headphones"
               fi
               
-              # # Set permalinks
-              # echo ""
-              # echo "[6/7] Configuring permalinks..."
-              # wp rewrite structure '/%postname%/' --allow-root --path=/var/www/html
-              # wp rewrite flush --hard --skip-plugins=redis-cache,w3-total-cache,query-monitor --allow-root --path=/var/www/html
-              # echo "✓ Permalinks configured"
+              # Set permalinks
+              echo ""
+              echo "[6/6] Configuring permalinks..."
+              wp rewrite structure '/%postname%/' --allow-root --path=/var/www/html
+              wp rewrite flush --allow-root --path=/var/www/html
+              echo "✓ Permalinks configured"
 
               # Final verification
               echo ""

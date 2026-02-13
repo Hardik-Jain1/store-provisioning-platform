@@ -7,12 +7,14 @@ This service orchestrates between the database, Helm, and Kubernetes.
 
 import logging
 import uuid
-from datetime import datetime
+import secrets
+import string
+from datetime import datetime, timezone
 from typing import List, Optional, Dict
 
 from models.store import Store
 from db.session import get_db_session, session_scope
-from config import BASE_DOMAIN
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,21 @@ class StoreService:
         """Initialize store service."""
         logger.info("StoreService initialized")
     
-    def create_store(self, name: str, engine: str) -> Store:
+    def _generate_secure_password(self, length: int = 16) -> str:
+        """
+        Generate a secure random password.
+        
+        Args:
+            length: Password length (default: 16)
+        
+        Returns:
+            Secure random password
+        """
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+        return password
+    
+    def create_store(self, name: str, engine: str, admin_username: str, admin_password: str, admin_email: str) -> Store:
         """
         Create a new store record in the database.
         
@@ -43,6 +59,9 @@ class StoreService:
         Args:
             name: User-friendly store name (must be unique)
             engine: Engine type ('woocommerce' or 'medusa')
+            admin_username: Admin username for the store
+            admin_password: Admin password for the store
+            admin_email: Admin email for the store
         
         Returns:
             Created Store object
@@ -50,7 +69,7 @@ class StoreService:
         Raises:
             ValueError: If validation fails
         """
-        logger.info(f"Creating store: name={name}, engine={engine}")
+        logger.info(f"Creating store: name={name}, engine={engine}, admin_username={admin_username}, admin_email={admin_email}")
         
         # Validate engine
         valid_engines = ['woocommerce', 'medusa']
@@ -62,6 +81,18 @@ class StoreService:
             raise ValueError("Store name cannot be empty")
         
         name = name.strip()
+        
+        # Validate admin fields
+        if not admin_username or not admin_username.strip():
+            raise ValueError("Admin username cannot be empty")
+        if not admin_password or not admin_password.strip():
+            raise ValueError("Admin password cannot be empty")
+        if not admin_email or not admin_email.strip():
+            raise ValueError("Admin email cannot be empty")
+        
+        admin_username = admin_username.strip()
+        admin_password = admin_password.strip()
+        admin_email = admin_email.strip()
         
         # Check for name uniqueness
         session = get_db_session()
@@ -77,7 +108,13 @@ class StoreService:
             helm_release = store_id  # Release name = store ID for determinism
             
             # Generate store domain
-            store_domain = f"{name}.{BASE_DOMAIN}"
+            store_domain = f"{name}.{Config.BASE_DOMAIN}"
+            
+            # Generate database credentials
+            db_root_password = self._generate_secure_password(20)
+            db_password = self._generate_secure_password(20)
+            db_name = f"store_{name.replace('-', '_')}_db"
+            db_username = f"user_{name.replace('-', '_')}"
             
             # Create store record
             store = Store(
@@ -89,8 +126,15 @@ class StoreService:
                 status='PROVISIONING',
                 failure_reason=None,
                 store_url=None,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                db_root_password=db_root_password,
+                db_name=db_name,
+                db_username=db_username,
+                db_password=db_password,
+                admin_username=admin_username,
+                admin_password=admin_password,
+                admin_email=admin_email,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
             )
             
             session.add(store)
@@ -151,7 +195,7 @@ class StoreService:
         List all stores.
         
         Returns:
-            List of Store objects
+            List of Store objects (empty list if no stores exist)
         """
         session = get_db_session()
         try:
@@ -194,7 +238,7 @@ class StoreService:
             logger.info(f"Updating store {store_id} status: {store.status} -> {status}")
             
             store.status = status
-            store.updated_at = datetime.utcnow()
+            store.updated_at = datetime.now(timezone.utc)
             
             if failure_reason:
                 store.failure_reason = failure_reason
@@ -276,7 +320,7 @@ class StoreService:
             Dictionary of Helm values
         """
         # Generate domain
-        domain = f"{store.name}.{BASE_DOMAIN}"
+        domain = f"{store.name}.{Config.BASE_DOMAIN}"
         
         values = {
             'store.id': store.id,
@@ -284,6 +328,13 @@ class StoreService:
             'store.namespace': store.namespace,
             'store.engine': store.engine,
             'store.domain': domain,
+            'secrets.database.rootPassword': store.db_root_password,
+            'secrets.database.name': store.db_name,
+            'secrets.database.username': store.db_username,
+            'secrets.database.password': store.db_password,
+            'secrets.admin.username': store.admin_username,
+            'secrets.admin.password': store.admin_password,
+            'secrets.admin.email': store.admin_email,
         }
         
         logger.debug(f"Generated Helm values for store {store.id}: {values}")

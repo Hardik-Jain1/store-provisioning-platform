@@ -11,7 +11,7 @@ from contextlib import contextmanager
 import logging
 
 from models.store import Base
-from config import DATABASE_URL
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +27,11 @@ def init_db():
     """
     global _engine, _session_factory
     
-    logger.info(f"Initializing database: {DATABASE_URL}")
+    logger.info(f"Initializing database: {Config.DATABASE_URL}")
     
     # Create engine
     _engine = create_engine(
-        DATABASE_URL,
+        Config.DATABASE_URL,
         echo=False,  # Set to True for SQL query logging
         pool_pre_ping=True,  # Verify connections before using
     )

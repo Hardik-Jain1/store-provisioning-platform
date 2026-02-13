@@ -76,6 +76,8 @@ class StoreListResource(Resource):
                     'status': store.status,
                     'store_url': store.store_url,
                     'failure_reason': store.failure_reason,
+                    'admin_username': store.admin_username,
+                    'admin_email': store.admin_email,
                     'created_at': store.created_at.isoformat() if store.created_at else None,
                     'updated_at': store.updated_at.isoformat() if store.updated_at else None,
                 })
@@ -84,7 +86,7 @@ class StoreListResource(Resource):
             
         except Exception as e:
             logger.error(f"Failed to list stores: {e}", exc_info=True)
-            abort(500, message='Internal server error')
+            return {'message': 'Internal server error'}, 500
     
     def post(self):
         """
@@ -93,7 +95,10 @@ class StoreListResource(Resource):
         Request body:
         {
             "name": "my-store",
-            "engine": "woocommerce"
+            "engine": "woocommerce",
+            "admin_username": "admin",
+            "admin_password": "MySecureAdminPass789!",
+            "admin_email": "admin@example.com"
         }
         
         Returns:
@@ -106,19 +111,37 @@ class StoreListResource(Resource):
             
             # Validate request
             if not data:
-                abort(400, message='Request body is required')
+                return {'message': 'Request body is required'}, 400
             
             name = data.get('name')
             engine = data.get('engine')
+            admin_username = data.get('admin_username')
+            admin_password = data.get('admin_password')
+            admin_email = data.get('admin_email')
             
             if not name:
-                abort(400, message='Field "name" is required')
+                return {'message': 'Field "name" is required'}, 400
             
             if not engine:
-                abort(400, message='Field "engine" is required')
+                return {'message': 'Field "engine" is required'}, 400
+            
+            if not admin_username:
+                return {'message': 'Field "admin_username" is required'}, 400
+            
+            if not admin_password:
+                return {'message': 'Field "admin_password" is required'}, 400
+            
+            if not admin_email:
+                return {'message': 'Field "admin_email" is required'}, 400
             
             # Create store record (this is synchronous and fast)
-            store = _store_service.create_store(name=name, engine=engine)
+            store = _store_service.create_store(
+                name=name,
+                engine=engine,
+                admin_username=admin_username,
+                admin_password=admin_password,
+                admin_email=admin_email
+            )
             
             # Submit for async provisioning
             _provisioning_worker.submit_provisioning_task(store.id)
@@ -132,18 +155,20 @@ class StoreListResource(Resource):
                 'engine': store.engine,
                 'namespace': store.namespace,
                 'status': store.status,
+                'admin_username': store.admin_username,
+                'admin_email': store.admin_email,
                 'created_at': store.created_at.isoformat()
             }, 202  # 202 Accepted
             
         except ValueError as e:
             # Validation error from service layer
             logger.warning(f"Store creation validation error: {e}")
-            abort(400, message=str(e))
+            return {'message': str(e)}, 400
         
         except Exception as e:
             # Unexpected error
             logger.error(f"Store creation failed: {e}", exc_info=True)
-            abort(500, message='Internal server error')
+            return {'message': 'Internal server error'}, 500
 
 
 class StoreResource(Resource):
@@ -170,7 +195,7 @@ class StoreResource(Resource):
             store = _store_service.get_store_by_id(store_id)
             
             if not store:
-                abort(404, message='Store not found')
+                return {'message': 'Store not found'}, 404
             
             return {
                 'id': store.id,
@@ -181,13 +206,15 @@ class StoreResource(Resource):
                 'status': store.status,
                 'store_url': store.store_url,
                 'failure_reason': store.failure_reason,
+                'admin_username': store.admin_username,
+                'admin_email': store.admin_email,
                 'created_at': store.created_at.isoformat() if store.created_at else None,
                 'updated_at': store.updated_at.isoformat() if store.updated_at else None,
             }, 200
             
         except Exception as e:
             logger.error(f"Failed to get store {store_id}: {e}", exc_info=True)
-            abort(500, message='Internal server error')
+            return {'message': 'Internal server error'}, 500
     
     def delete(self, store_id: str):
         """
@@ -206,11 +233,11 @@ class StoreResource(Resource):
             store = _store_service.get_store_by_id(store_id)
             
             if not store:
-                abort(404, message='Store not found')
+                return {'message': 'Store not found'}, 404
             
             # Prevent deletion of already deleted stores
             if store.status == 'DELETED':
-                abort(400, message='Store already deleted')
+                return {'message': 'Store already deleted'}, 400
             
             # Mark as DELETING
             _store_service.mark_store_deleting(store_id)
@@ -244,11 +271,17 @@ class StoreResource(Resource):
                     failure_reason=f"Delete failed: {output}"
                 )
                 
-                abort(500, message='Failed to delete store', details=output)
+                return {
+                    'message': 'Failed to delete store',
+                    'details': output
+                }, 500
         
         except Exception as e:
             logger.error(f"Store deletion failed: {e}", exc_info=True)
-            abort(500, message='Internal server error')
+            return {
+                    'message': 'Failed to delete store',
+                    'details': output
+                }, 500
 
 
 class HealthResource(Resource):
