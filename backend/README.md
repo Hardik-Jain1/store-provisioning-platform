@@ -18,6 +18,36 @@ This is the **backend control plane** for the Store Provisioning Platform. It or
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+  - [System Requirements](#system-requirements)
+  - [Verify Prerequisites](#verify-prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+  - [Configuration Variables](#configuration-variables)
+- [Running the Backend](#running-the-backend)
+- [API Endpoints](#api-endpoints)
+  - [Health Check](#health-check)
+  - [Create Store](#create-store)
+  - [List Stores](#list-stores)
+  - [Get Store](#get-store)
+  - [Delete Store](#delete-store)
+- [Testing the Backend](#testing-the-backend)
+- [Store Lifecycle States](#store-lifecycle-states)
+- [How Provisioning Works](#how-provisioning-works)
+- [Idempotency and Crash Recovery](#idempotency-and-crash-recovery)
+- [Troubleshooting](#troubleshooting)
+  - [Backend won't start](#backend-wont-start)
+  - [Store stuck in PROVISIONING](#store-stuck-in-provisioning)
+  - [Store failed to provision](#store-failed-to-provision)
+- [Project Structure](#project-structure)
+- [Design Principles](#design-principles)
+
+---
+
 ## Architecture
 
 ```

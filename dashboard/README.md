@@ -2,6 +2,27 @@
 
 A modern, production-ready Vue 3 dashboard for managing ecommerce store provisioning on Kubernetes.
 
+## Table of Contents
+
+- [Features](#features)
+- [🛠️ Tech Stack](#️-tech-stack)
+- [📋 Prerequisites](#-prerequisites)
+- [🏃 Quick Start](#-quick-start)
+  - [1. Install Dependencies](#1-install-dependencies)
+  - [2. Start Development Server](#2-start-development-server)
+  - [3. Build for Production](#3-build-for-production)
+  - [4. Preview Production Build](#4-preview-production-build)
+- [🎯 Usage Guide](#-usage-guide)
+  - [Creating a Store](#creating-a-store)
+  - [Viewing Stores](#viewing-stores)
+  - [Opening a Store](#opening-a-store)
+  - [Deleting a Store](#deleting-a-store)
+  - [Refreshing Store List](#refreshing-store-list)
+- [📁 Project Structure](#-project-structure)
+- [🔌 API Integration](#-api-integration)
+  - [Endpoints Used](#endpoints-used)
+  - [Proxy Configuration](#proxy-configuration)
+
 ## Features
 
 - **Store Management**: Create, view, and delete stores

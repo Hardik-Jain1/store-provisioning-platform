@@ -6,6 +6,51 @@ A Kubernetes-native control plane for provisioning isolated e-commerce stores (W
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+  - [What Problem Does It Solve?](#what-problem-does-it-solve)
+  - [High-Level Architecture](#high-level-architecture)
+- [Core Features](#core-features)
+  - [Functional](#functional)
+  - [Reliability & Operations](#reliability--operations)
+  - [Local-to-Production](#local-to-production)
+- [End-to-End Flow](#end-to-end-flow)
+- [Prerequisites](#prerequisites)
+  - [System Requirements](#system-requirements)
+  - [Verify Installation](#verify-installation)
+- [Local Setup (Minikube)](#local-setup-minikube)
+  - [Step 1: Start Kubernetes Cluster](#step-1-start-kubernetes-cluster)
+  - [Step 2: Install NGINX Ingress Controller](#step-2-install-nginx-ingress-controller)
+  - [Step 3: Configure Local DNS](#step-3-configure-local-dns)
+  - [Step 4: Setup Backend](#step-4-setup-backend)
+  - [Step 5: Setup Dashboard](#step-5-setup-dashboard)
+  - [Step 6: Verify Setup](#step-6-verify-setup)
+- [How to Create a Store and Place an Order](#how-to-create-a-store-and-place-an-order)
+  - [1. Open Dashboard](#1-open-dashboard)
+  - [2. Create a New Store](#2-create-a-new-store)
+  - [3. Wait for Provisioning](#3-wait-for-provisioning)
+  - [4. Open Store Frontend](#4-open-store-frontend)
+  - [5. Place a Test Order](#5-place-a-test-order)
+  - [6. Verify Order in Admin Panel](#6-verify-order-in-admin-panel)
+  - [7. Delete Store (Optional)](#7-delete-store-optional)
+- [VPS / Production Setup (k3s)](#vps--production-setup-k3s)
+  - [Step 1: Install k3s](#step-1-install-k3s-if-not-already-installed)
+  - [Step 2: Configure DNS](#step-2-configure-dns)
+  - [Step 3: Deploy Backend on VPS](#step-3-deploy-backend-on-vps)
+  - [Step 4: Deploy Dashboard](#step-4-deploy-dashboard-optional---production-build)
+  - [Step 5: What Changes Between Local and Production?](#step-5-what-changes-between-local-and-production)
+  - [Step 6: Optional - TLS with cert-manager](#step-6-optional---tls-with-cert-manager)
+  - [Step 7: Upgrade and Rollback](#step-7-upgrade-and-rollback)
+- [System Design & Tradeoffs](#system-design--tradeoffs)
+  - [Architecture Decisions](#architecture-decisions)
+  - [Scaling Considerations](#scaling-considerations)
+  - [Security Hardening](#security-hardening-implemented)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+
+---
+
 ## Overview
 
 This platform allows users to provision fully-functional e-commerce stores on Kubernetes with a single click. Each store runs in complete isolation with its own namespace, database, persistent storage, and ingress. The same Helm charts deploy to local clusters (Minikube/Kind) and production VPS (k3s) with only configuration changes.
@@ -70,28 +115,28 @@ Traditional e-commerce hosting requires manual server setup, database configurat
 ## Core Features
 
 ### Functional
-- ✅ **Multi-store provisioning** - Concurrent, isolated store creation
-- ✅ **Namespace-per-store isolation** - Complete resource separation
-- ✅ **Helm-based deployment** - Production-ready templating engine
-- ✅ **WooCommerce engine** - Fully functional with order placement
-- ✅ **Persistent storage** - Database and uploads survive pod restarts
-- ✅ **Ingress-based routing** - HTTP exposure with stable URLs
-- ✅ **Automated setup** - Kubernetes Job installs WooCommerce, creates products
-- ✅ **Clean teardown** - Delete stores safely with no orphaned resources
+- **Multi-store provisioning** - Concurrent, isolated store creation
+- **Namespace-per-store isolation** - Complete resource separation
+- **Helm-based deployment** - Production-ready templating engine
+- **WooCommerce engine** - Fully functional with order placement
+- **Persistent storage** - Database and uploads survive pod restarts
+- **Ingress-based routing** - HTTP exposure with stable URLs
+- **Automated setup** - Kubernetes Job installs WooCommerce, creates products
+- **Clean teardown** - Delete stores safely with no orphaned resources
 
 ### Reliability & Operations
-- ✅ **Idempotency** - Safe to retry store creation
-- ✅ **Crash recovery** - Resume provisioning after backend restart
-- ✅ **Failure handling** - Clear status and error reporting
-- ✅ **Health checks** - Readiness/liveness probes on all components
-- ✅ **Resource limits** - CPU/memory requests and limits
-- ✅ **Secrets management** - Auto-generated credentials, no hardcoded secrets
-- ✅ **Audit trail** - Timestamps and status history in database
+- **Idempotency** - Safe to retry store creation
+- **Crash recovery** - Resume provisioning after backend restart
+- **Failure handling** - Clear status and error reporting
+- **Health checks** - Readiness/liveness probes on all components
+- **Resource limits** - CPU/memory requests and limits
+- **Secrets management** - Auto-generated credentials, no hardcoded secrets
+- **Audit trail** - Timestamps and status history in database
 
 ### Local-to-Production
-- ✅ **Environment flexibility** - Same Helm charts for local and VPS
-- ✅ **Values-based configuration** - `values-local.yaml` vs `values-prod.yaml`
-- ✅ **Upgrade/rollback support** - Helm release management
+- **Environment flexibility** - Same Helm charts for local and VPS
+- **Values-based configuration** - `values-local.yaml` vs `values-prod.yaml`
+- **Upgrade/rollback support** - Helm release management
 
 ---
 
@@ -375,7 +420,7 @@ Once status is **READY**:
 3. In WordPress admin, go to **WooCommerce → Orders**
 4. Your test order should be listed with status **"Processing"**
 
-**✅ Success! You've provisioned a store and placed an order end-to-end.**
+**Success! You've provisioned a store and placed an order end-to-end.**
 
 ### 7. Delete Store (Optional)
 
@@ -750,11 +795,11 @@ helm history store-abc123 --namespace store-abc123
 
 | Component | Scalable? | How? |
 |-----------|-----------|------|
-| **Dashboard** | ✅ Yes | Stateless, can run multiple instances behind load balancer |
-| **Backend API** | ✅ Yes | Stateless (except SQLite), can use Postgres + read replicas |
-| **Provisioning Worker** | ⚠️ Limited | ThreadPoolExecutor is single-process. Could use multi-process or distributed queue (Celery + Redis) |
-| **Store Workloads** | ✅ Yes | WordPress can scale horizontally with shared PVC/EFS and session handling |
-| **MySQL** | ⚠️ Stateful | Vertical scaling or managed MySQL (RDS/Cloud SQL) for high load |
+| **Dashboard** | Yes | Stateless, can run multiple instances behind load balancer |
+| **Backend API** | Yes | Stateless (except SQLite), can use Postgres + read replicas |
+| **Provisioning Worker** | Limited | ThreadPoolExecutor is single-process. Could use multi-process or distributed queue (Celery + Redis) |
+| **Store Workloads** | Yes | WordPress can scale horizontally with shared PVC/EFS and session handling |
+| **MySQL** | Stateful | Vertical scaling or managed MySQL (RDS/Cloud SQL) for high load |
 
 #### Provisioning Throughput
 
@@ -776,10 +821,10 @@ Current design provisions ~5 stores concurrently (ThreadPoolExecutor with `max_w
 
 ### Security Hardening (Implemented)
 
-- ✅ Auto-generated secrets (no hardcoded passwords)
-- ✅ Secrets stored in Kubernetes Secrets (not in Git)
-- ✅ Namespace isolation (each store is a separate namespace)
-- ✅ Resource limits (prevents resource exhaustion)
+- Auto-generated secrets (no hardcoded passwords)
+- Secrets stored in Kubernetes Secrets (not in Git)
+- Namespace isolation (each store is a separate namespace)
+- Resource limits (prevents resource exhaustion)
 
 ---
 
