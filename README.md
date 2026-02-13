@@ -2,7 +2,7 @@
 
 A Kubernetes-native control plane for provisioning isolated e-commerce stores (WooCommerce/Medusa) with namespace-per-store isolation, Helm-based deployment, and a Vue.js management dashboard.
 
-**Live Demo:** [Coming Soon]  
+**Live Demo:** [Click](https://drive.google.com/file/d/1SI0yiZq7rcK9L5RrOtusbo1CPKU2OHcd/view?usp=sharing)  
 
 ---
 
