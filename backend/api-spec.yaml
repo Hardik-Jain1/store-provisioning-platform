@@ -1,0 +1,577 @@
+openapi: 3.0.3
+info:
+  title: Store Provisioning Platform API
+  description: |
+    REST API for managing ecommerce store provisioning on Kubernetes.
+    
+    The platform supports provisioning WooCommerce and Medusa stores via Helm charts.
+    Store provisioning is asynchronous - requests return immediately with PROVISIONING status,
+    and stores transition to READY or FAILED status based on Kubernetes deployment results.
+    
+    **Key Features:**
+    - Asynchronous store provisioning
+    - Automatic crash recovery
+    - Kubernetes-native deployment via Helm
+    - Support for multiple ecommerce engines
+    
+    **Store Lifecycle States:**
+    - `PROVISIONING`: Store is being deployed
+    - `READY`: Store is fully operational
+    - `FAILED`: Provisioning failed (see failure_reason)
+    - `DELETING`: Store deletion in progress
+    - `DELETED`: Store has been removed
+  version: 1.0.0
+  contact:
+    name: Store Provisioning Platform
+    
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+  - url: http://{host}:{port}/api/v1
+    description: Custom server
+    variables:
+      host:
+        default: localhost
+        description: Server host
+      port:
+        default: '5000'
+        description: Server port
+
+tags:
+  - name: Health
+    description: Service health check endpoints
+  - name: Stores
+    description: Store lifecycle management endpoints
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the API service is healthy and operational
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: store-provisioning-backend
+              example:
+                status: healthy
+                service: store-provisioning-backend
+
+  /stores:
+    get:
+      tags:
+        - Stores
+      summary: List all stores
+      description: Retrieve a list of all stores across all lifecycle states
+      operationId: listStores
+      responses:
+        '200':
+          description: List of stores retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stores:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Store'
+              example:
+                stores:
+                  - id: store-abc123
+                    name: my-woo-store
+                    engine: woocommerce
+                    namespace: store-abc123
+                    status: READY
+                    store_url: http://my-woo-store.localhost
+                    failure_reason: null
+                    admin_username: admin
+                    admin_email: admin@example.com
+                    created_at: "2026-02-13T10:30:00Z"
+                    updated_at: "2026-02-13T10:35:00Z"
+                  - id: store-def456
+                    name: my-medusa-store
+                    engine: medusa
+                    namespace: store-def456
+                    status: PROVISIONING
+                    store_url: null
+                    failure_reason: null
+                    admin_username: storeowner
+                    admin_email: owner@example.com
+                    created_at: "2026-02-13T11:00:00Z"
+                    updated_at: "2026-02-13T11:00:00Z"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Stores
+      summary: Create a new store
+      description: |
+        Submit a request to create a new ecommerce store. The request returns immediately
+        with PROVISIONING status. The actual provisioning happens asynchronously via Helm/Kubernetes.
+        
+        Poll the GET /stores/{store_id} endpoint to check provisioning progress.
+      operationId: createStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoreRequest'
+            examples:
+              woocommerce:
+                summary: Create WooCommerce store
+                value:
+                  name: my-woocommerce-store
+                  engine: woocommerce
+                  admin_username: admin
+                  admin_password: SecurePass123!
+                  admin_email: admin@mystore.com
+              medusa:
+                summary: Create Medusa store
+                value:
+                  name: my-medusa-store
+                  engine: medusa
+                  admin_username: storeowner
+                  admin_password: MedusaPass456!
+                  admin_email: owner@medusastore.com
+      responses:
+        '202':
+          description: Store creation request accepted (provisioning in progress)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreCreatedResponse'
+              example:
+                id: store-abc123
+                name: my-woocommerce-store
+                engine: woocommerce
+                namespace: store-abc123
+                status: PROVISIONING
+                admin_username: admin
+                admin_email: admin@mystore.com
+                created_at: "2026-02-13T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /stores/{store_id}:
+    get:
+      tags:
+        - Stores
+      summary: Get store details
+      description: Retrieve detailed information about a specific store by its ID
+      operationId: getStore
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreDetail'
+              examples:
+                ready:
+                  summary: Store in READY state
+                  value:
+                    id: store-abc123
+                    name: my-woo-store
+                    engine: woocommerce
+                    namespace: store-abc123
+                    helm_release: store-abc123
+                    status: READY
+                    store_url: http://my-woo-store.localhost
+                    failure_reason: null
+                    admin_username: admin
+                    admin_email: admin@example.com
+                    created_at: "2026-02-13T10:30:00Z"
+                    updated_at: "2026-02-13T10:35:00Z"
+                provisioning:
+                  summary: Store in PROVISIONING state
+                  value:
+                    id: store-def456
+                    name: my-medusa-store
+                    engine: medusa
+                    namespace: store-def456
+                    helm_release: store-def456
+                    status: PROVISIONING
+                    store_url: null
+                    failure_reason: null
+                    admin_username: storeowner
+                    admin_email: owner@example.com
+                    created_at: "2026-02-13T11:00:00Z"
+                    updated_at: "2026-02-13T11:00:00Z"
+                failed:
+                  summary: Store in FAILED state
+                  value:
+                    id: store-xyz789
+                    name: failed-store
+                    engine: woocommerce
+                    namespace: store-xyz789
+                    helm_release: store-xyz789
+                    status: FAILED
+                    store_url: null
+                    failure_reason: "Helm installation failed: timeout waiting for pods"
+                    admin_username: admin
+                    admin_email: admin@failed.com
+                    created_at: "2026-02-13T09:00:00Z"
+                    updated_at: "2026-02-13T09:15:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Stores
+      summary: Delete a store
+      description: |
+        Delete a store and clean up all associated Kubernetes resources.
+        The deletion is performed synchronously via Helm uninstall.
+        
+        Stores in DELETED status cannot be deleted again.
+      operationId: deleteStore
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: Store identifier
+                  status:
+                    type: string
+                    enum: [DELETED]
+                    description: Final status after deletion
+                  message:
+                    type: string
+                    description: Success message
+              example:
+                id: store-abc123
+                status: DELETED
+                message: Store deleted successfully
+        '400':
+          description: Invalid state for deletion (e.g., already deleted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Store already deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Store deletion failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message
+                  details:
+                    type: string
+                    description: Detailed error information from Helm
+              example:
+                message: Failed to delete store
+                details: "Error: release: not found"
+
+components:
+  parameters:
+    StoreId:
+      name: store_id
+      in: path
+      required: true
+      description: Unique store identifier (format: store-{random})
+      schema:
+        type: string
+        pattern: '^store-[a-z0-9]{6}$'
+        example: store-abc123
+
+  schemas:
+    CreateStoreRequest:
+      type: object
+      required:
+        - name
+        - engine
+        - admin_username
+        - admin_password
+        - admin_email
+      properties:
+        name:
+          type: string
+          description: |
+            User-friendly store name (must be unique).
+            Used to generate store URL and Kubernetes namespace.
+            Must be lowercase alphanumeric with hyphens.
+          pattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+          minLength: 3
+          maxLength: 50
+          example: my-awesome-store
+        engine:
+          type: string
+          description: Ecommerce engine to deploy
+          enum:
+            - woocommerce
+            - medusa
+          example: woocommerce
+        admin_username:
+          type: string
+          description: Administrator username for store access
+          minLength: 3
+          maxLength: 50
+          example: admin
+        admin_password:
+          type: string
+          description: |
+            Administrator password for store access.
+            Must be strong (min 8 chars, alphanumeric + special chars recommended).
+          format: password
+          minLength: 8
+          example: SecurePass123!
+        admin_email:
+          type: string
+          description: Administrator email address
+          format: email
+          example: admin@mystore.com
+
+    StoreCreatedResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique store identifier
+          example: store-abc123
+        name:
+          type: string
+          description: Store name
+          example: my-awesome-store
+        engine:
+          type: string
+          description: Ecommerce engine
+          enum:
+            - woocommerce
+            - medusa
+          example: woocommerce
+        namespace:
+          type: string
+          description: Kubernetes namespace
+          example: store-abc123
+        status:
+          type: string
+          description: Current store status (always PROVISIONING on creation)
+          enum:
+            - PROVISIONING
+          example: PROVISIONING
+        admin_username:
+          type: string
+          description: Administrator username
+          example: admin
+        admin_email:
+          type: string
+          description: Administrator email
+          format: email
+          example: admin@mystore.com
+        created_at:
+          type: string
+          format: date-time
+          description: Store creation timestamp (ISO 8601)
+          example: "2026-02-13T10:30:00Z"
+
+    Store:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique store identifier
+          example: store-abc123
+        name:
+          type: string
+          description: Store name
+          example: my-awesome-store
+        engine:
+          type: string
+          description: Ecommerce engine
+          enum:
+            - woocommerce
+            - medusa
+          example: woocommerce
+        namespace:
+          type: string
+          description: Kubernetes namespace
+          example: store-abc123
+        status:
+          type: string
+          description: Current store lifecycle status
+          enum:
+            - PROVISIONING
+            - READY
+            - FAILED
+            - DELETING
+            - DELETED
+          example: READY
+        store_url:
+          type: string
+          nullable: true
+          description: Store access URL (null until READY)
+          format: uri
+          example: http://my-awesome-store.localhost
+        failure_reason:
+          type: string
+          nullable: true
+          description: Failure reason (only populated when status is FAILED)
+          example: null
+        admin_username:
+          type: string
+          description: Administrator username
+          example: admin
+        admin_email:
+          type: string
+          description: Administrator email
+          format: email
+          example: admin@mystore.com
+        created_at:
+          type: string
+          format: date-time
+          description: Store creation timestamp (ISO 8601)
+          example: "2026-02-13T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp (ISO 8601)
+          example: "2026-02-13T10:35:00Z"
+
+    StoreDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique store identifier
+          example: store-abc123
+        name:
+          type: string
+          description: Store name
+          example: my-awesome-store
+        engine:
+          type: string
+          description: Ecommerce engine
+          enum:
+            - woocommerce
+            - medusa
+          example: woocommerce
+        namespace:
+          type: string
+          description: Kubernetes namespace
+          example: store-abc123
+        helm_release:
+          type: string
+          description: Helm release name (same as store ID)
+          example: store-abc123
+        status:
+          type: string
+          description: Current store lifecycle status
+          enum:
+            - PROVISIONING
+            - READY
+            - FAILED
+            - DELETING
+            - DELETED
+          example: READY
+        store_url:
+          type: string
+          nullable: true
+          description: Store access URL (null until READY)
+          format: uri
+          example: http://my-awesome-store.localhost
+        failure_reason:
+          type: string
+          nullable: true
+          description: Failure reason (only populated when status is FAILED)
+          example: null
+        admin_username:
+          type: string
+          description: Administrator username
+          example: admin
+        admin_email:
+          type: string
+          description: Administrator email
+          format: email
+          example: admin@mystore.com
+        created_at:
+          type: string
+          format: date-time
+          description: Store creation timestamp (ISO 8601)
+          example: "2026-02-13T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp (ISO 8601)
+          example: "2026-02-13T10:35:00Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+          example: Field "name" is required
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters or validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingField:
+              summary: Missing required field
+              value:
+                message: Field "name" is required
+            duplicateName:
+              summary: Duplicate store name
+              value:
+                message: Store with name 'my-store' already exists
+            invalidEngine:
+              summary: Invalid engine
+              value:
+                message: Engine must be either 'woocommerce' or 'medusa'
+
+    NotFound:
+      description: Store not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Store not found
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Internal server error
