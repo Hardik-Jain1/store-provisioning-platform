@@ -121,12 +121,7 @@ pip install -r requirements.txt
 
 The backend expects the Helm chart to be at:
 ```
-../helm/store/
-```
-
-Verify it exists:
-```bash
-ls ../helm/store/Chart.yaml
+helm/store/
 ```
 
 ---
@@ -144,7 +139,7 @@ Create a `.env` file (optional) or set environment variables:
 DATABASE_URL=sqlite:///store_platform.db
 
 # Helm
-HELM_CHART_PATH=../helm/store
+HELM_CHART_PATH=helm/store
 HELM_VALUES_FILE=values.yaml
 HELM_ENV_VALUES_FILE=values-local.yaml
 
@@ -154,6 +149,7 @@ HELM_ENV_VALUES_FILE=values-local.yaml
 # Provisioning
 PROVISIONING_TIMEOUT_SECONDS=600  # 10 minutes
 PROVISIONING_POLL_INTERVAL_SECONDS=5
+PROVISIONING_MAX_WORKERS=5
 
 # Domain
 BASE_DOMAIN=localhost
@@ -161,9 +157,6 @@ BASE_DOMAIN=localhost
 # Logging
 LOG_DIR=logs  # Directory for log files
 LOG_FILE=store_platform.log  # Log file name
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-LOG_MAX_BYTES=10485760  # 10MB max log file size before rotation
-LOG_BACKUP_COUNT=5  # Number of backup log files to keep
 
 # Flask
 FLASK_HOST=0.0.0.0
@@ -225,7 +218,10 @@ curl -X POST http://localhost:5000/api/v1/stores \
   -H "Content-Type: application/json" \
   -d '{
     "name": "my-store",
-    "engine": "woocommerce"
+    "engine": "woocommerce",
+    "admin_username": "admin",
+    "admin_password": "MySecureAdminPass789!",
+    "admin_email": "admin@example.com"
   }'
 ```
 
@@ -237,6 +233,8 @@ Response (202 Accepted):
   "engine": "woocommerce",
   "namespace": "store-my-store-abc123",
   "status": "PROVISIONING",
+  "admin_username": "admin",
+  "admin_email": "admin@example.com",
   "created_at": "2026-02-10T10:00:00"
 }
 ```
@@ -261,6 +259,8 @@ Response:
       "status": "READY",
       "store_url": "http://my-store.localhost",
       "failure_reason": null,
+      "admin_username": "admin",
+      "admin_email": "admin@example.com",
       "created_at": "2026-02-10T10:00:00",
       "updated_at": "2026-02-10T10:05:00"
     }
@@ -285,6 +285,8 @@ Response:
   "status": "READY",
   "store_url": "http://my-store.localhost",
   "failure_reason": null,
+  "admin_username": "admin",
+  "admin_email": "admin@example.com",
   "created_at": "2026-02-10T10:00:00",
   "updated_at": "2026-02-10T10:05:00"
 }
@@ -312,21 +314,27 @@ Response:
 ### 1. Test health endpoint
 
 ```bash
-curl http://localhost:5000/health
+curl http://localhost:5000/api/v1/health
 ```
 
 ### 2. Create a store
 
 ```bash
-curl -X POST http://localhost:5000/stores \
+curl -X POST http://localhost:5000/api/v1/stores \
   -H "Content-Type: application/json" \
-  -d '{"name": "test-store", "engine": "woocommerce"}'
+  -d '{
+    "name": "test-store",
+    "engine": "woocommerce",
+    "admin_username": "admin",
+    "admin_password": "SecurePass123!",
+    "admin_email": "admin@test.com"
+  }'
 ```
 
 ### 3. Check store status
 
 ```bash
-curl http://localhost:5000/stores
+curl http://localhost:5000/api/v1/stores
 ```
 
 Watch the backend logs to see provisioning progress.
@@ -347,7 +355,7 @@ helm list -A
 ### 5. Delete store
 
 ```bash
-curl -X DELETE http://localhost:5000/stores/test-store-abc123
+curl -X DELETE http://localhost:5000/api/v1/stores/test-store-abc123
 ```
 
 ---
@@ -386,12 +394,14 @@ The backend tracks stores through these states:
 ### Step-by-step flow:
 
 1. **API receives POST /stores request**
-   - Validates input (name, engine)
+   - Validates input (name, engine, admin credentials)
    - Creates store record in database with status=PROVISIONING
    - Returns immediately to client
 
 2. **Provisioning worker picks up task**
-   - Runs in background thread
+   - Task is submitted to ThreadPoolExecutor
+   - Runs concurrently in worker thread
+   - Multiple stores can be provisioned simultaneously (max 5 by default)
    - Fetches store from database
 
 3. **Helm install**
@@ -424,11 +434,13 @@ The backend tracks stores through these states:
 When the backend restarts:
 
 1. Scans database for stores in PROVISIONING state
-2. Checks if Helm release exists for each
-3. If yes: Resumes readiness checks
-4. If no: Restarts Helm install
+2. Submits each store to the thread pool for concurrent recovery
+3. For each store:
+   - Checks if Helm release exists
+   - If yes: Resumes readiness checks
+   - If no: Restarts Helm install
 
-This ensures no orphaned resources and graceful recovery.
+This ensures no orphaned resources and graceful recovery. Multiple stores are recovered concurrently using the thread pool.
 
 ---
 
@@ -471,7 +483,7 @@ helm status {release-name} -n store-{store-id}
 
 Check `failure_reason` in API response:
 ```bash
-curl http://localhost:5000/stores/{store-id}
+curl http://localhost:5000/api/v1/stores/{store-id}
 ```
 
 Common failures:
@@ -540,27 +552,3 @@ This backend follows strict design principles from the implementation plan:
    - Stores marked as FAILED, not deleted
    - User maintains control
 
----
-
-## Next Steps
-
-1. **Implement Dashboard** - React UI to consume these APIs
-2. **Add Medusa Support** - Currently only WooCommerce is fully implemented
-3. **Add Authentication** - Secure the API endpoints
-4. **Add Metrics** - Prometheus metrics for observability
-5. **Production Deployment** - Deploy backend to VPS alongside k3s
-
----
-
-## License
-
-This is a demonstration project. All code is yours to use.
-
----
-
-## Support
-
-For questions or issues, refer to:
-- Backend implementation plan: `../docs/backend_implementation_plan.md`
-- System design: `../docs/system_design.md`
-- Helm chart documentation: `../helm/README.md`
