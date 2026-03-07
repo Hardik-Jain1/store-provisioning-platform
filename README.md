@@ -1,8 +1,12 @@
 # Store Provisioning Platform
 
-A Kubernetes-native control plane for provisioning isolated e-commerce stores (WooCommerce/Medusa) with namespace-per-store isolation, Helm-based deployment, and a Vue.js management dashboard.
+A Kubernetes-native platform to automate end-to-end provisioning of fully isolated e-commerce stores using namespace-per-store architecture and Helm-based deployments.
 
-**Live Demo:** [Click](https://drive.google.com/file/d/1SI0yiZq7rcK9L5RrOtusbo1CPKU2OHcd/view?usp=sharing)  
+---
+
+## 🎥 Video Demo
+
+https://github.com/user-attachments/assets/9ec04cff-1beb-4b64-81fa-d0f17c019c65
 
 ---
 
@@ -66,49 +70,7 @@ Traditional e-commerce hosting requires manual server setup, database configurat
 
 ### High-Level Architecture
 
-```
-┌──────────────────┐
-│  Vue.js Dashboard│  (Port 3000)
-│  User Interface  │  - Create/view/delete stores
-└────────┬─────────┘  - Real-time status updates
-         │ REST API
-         ↓
-┌──────────────────────────────────────┐
-│  Flask Backend (Control Plane)       │  (Port 5000)
-│  ┌────────────────────────────────┐  │
-│  │ Store Service (Business Logic) │  │
-│  └───┬───────────────────────┬────┘  │
-│      │                       │        │
-│  ┌───▼──────┐      ┌─────────▼─────┐ │
-│  │ Database │      │ Provisioning  │ │
-│  │ (SQLite) │      │ Worker (Async)│ │
-│  └──────────┘      └────────┬──────┘ │
-│                              │        │
-│         ┌────────────────────▼──────┐ │
-│         │ Helm Service + K8s Client │ │
-│         └───────────┬────────────────┘ │
-└─────────────────────┼──────────────────┘
-                      │
-          ┌───────────▼───────────┐
-          │  Helm + Kubernetes    │
-          └───────────┬───────────┘
-                      │
-    ┌─────────────────┴─────────────────┐
-    │                                    │
-┌───▼───────────────┐        ┌──────────▼────────┐
-│ Namespace:        │        │ Namespace:         │
-│ store-abc123      │        │ store-xyz456       │
-│                   │        │                    │
-│ ├─ MySQL          │        │ ├─ MySQL           │
-│ ├─ WordPress      │        │ ├─ WordPress       │
-│ ├─ WooCommerce    │        │ ├─ WooCommerce     │
-│ ├─ Setup Job      │        │ ├─ Setup Job       │
-│ ├─ Services       │        │ ├─ Services        │
-│ ├─ Ingress        │        │ ├─ Ingress         │
-│ ├─ PVCs           │        │ ├─ PVCs            │
-│ └─ Secrets        │        │ └─ Secrets         │
-└───────────────────┘        └────────────────────┘
-```
+<img width="1124" height="789" alt="image" src="https://github.com/user-attachments/assets/958ba9f9-b369-46f2-8bc9-b6324f47e3fd" />
 
 ---
 
@@ -141,6 +103,8 @@ Traditional e-commerce hosting requires manual server setup, database configurat
 ---
 
 ## End-to-End Flow
+
+<img width="1341" height="463" alt="image" src="https://github.com/user-attachments/assets/4c5b635c-0f9a-49fc-8040-7b8faddce88f" />
 
 1. **User creates store** via dashboard → `POST /stores` with name, engine, credentials
 2. **Backend creates record** in database with status `PROVISIONING`
